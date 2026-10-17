@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from workspace import DEFAULT_LIMITS, coverage, task_grid, within_limits
+from robot.workspace import DEFAULT_LIMITS, coverage, task_grid, within_limits
 
 FULL = (np.radians(-180), np.radians(180))
 

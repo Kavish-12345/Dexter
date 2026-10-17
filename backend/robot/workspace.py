@@ -4,7 +4,7 @@ Units are cm and radians, like kinematics.py.
 """
 import numpy as np
 
-from kinematics import TOL, inverse_kinematics
+from robot.kinematics import TOL, inverse_kinematics
 
 MAX_POINTS = 2500
 

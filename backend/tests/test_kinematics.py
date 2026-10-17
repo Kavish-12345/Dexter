@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kinematics import forward_kinematics, inverse_kinematics
+from robot.kinematics import forward_kinematics, inverse_kinematics
 
 
 def test_fk_straight_arm():
