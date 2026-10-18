@@ -15,6 +15,7 @@ def test_defaults():
     assert d["task_rect"] == [10.0, 25.0, 5.0, 20.0]
     assert d["theta2_limits"] == pytest.approx([math.radians(-150), math.radians(150)])
     assert "pop_size" not in d  # fixed, not exposed
+    assert "length_step" not in d  # fixed at 0.1 cm, not exposed
 
 
 def test_evaluate_full_coverage():
@@ -87,7 +88,6 @@ def test_workspace_shape_and_nulls():
     ({"task_rect": [25, 10, 5, 20]}, "x_max must be >= x_min"),
     ({"grid_spacing": 0.1}, "exceeds the cap"),
     ({"min_coverage": 1.5}, "min_coverage must be between 0 and 1"),
-    ({"length_step": 0}, "length_step must be greater than 0"),
     ({"grid_spacing": 0}, "grid_spacing must be greater than 0"),
     ({"theta2_limits": [1.0, -1.0]}, "theta2_limits: lower limit must not exceed upper limit"),
 ])

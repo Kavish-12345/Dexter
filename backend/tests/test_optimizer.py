@@ -32,6 +32,12 @@ def test_front_designs_are_valid():
             assert abs(k - round(k)) < 1e-6  # on the 0.1 cm step
 
 
+def test_front_has_no_duplicate_designs():
+    front = optimize(seed=7, **FAST)["front"]
+    pairs = [(d["l1"], d["l2"]) for d in front]
+    assert len(pairs) == len(set(pairs))
+
+
 def test_front_is_non_dominated():
     front = optimize(seed=3, **FAST)["front"]
     for a in front:

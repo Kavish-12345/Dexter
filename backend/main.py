@@ -7,8 +7,8 @@ import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, model_validator
 
-from robot.defaults import (GRID_SPACING, JOINT_LIMITS, LENGTH_STEP, LINK_MAX, LINK_MIN, MAX_TOTAL,
-                            MIN_COVERAGE, TASK_RECT, WORKSPACE_GRID)
+from robot.defaults import (GRID_SPACING, JOINT_LIMITS, LINK_MAX, LINK_MIN, MAX_TOTAL, MIN_COVERAGE,
+                            TASK_RECT, WORKSPACE_GRID)
 from robot.dexterity import dexterity
 from robot.fitness import evaluate
 from robot.kinematics import inverse_kinematics
@@ -23,7 +23,6 @@ class Config(BaseModel):
     link_min: float = LINK_MIN
     link_max: float = LINK_MAX
     max_total: float = MAX_TOTAL
-    length_step: float = LENGTH_STEP
     min_coverage: float = MIN_COVERAGE
     theta1_limits: tuple[float, float] = JOINT_LIMITS[0]
     theta2_limits: tuple[float, float] = JOINT_LIMITS[1]
@@ -39,8 +38,6 @@ class Config(BaseModel):
             errors.append("link_min must be less than link_max")
         if 2 * self.link_min > self.max_total:
             errors.append("2 x link_min must not exceed max_total (no design could fit)")
-        if self.length_step <= 0:
-            errors.append("length_step must be greater than 0")
         if not 0 <= self.min_coverage <= 1:
             errors.append("min_coverage must be between 0 and 1")
         for name, (lo, hi) in (("theta1_limits", self.theta1_limits), ("theta2_limits", self.theta2_limits)):
@@ -101,9 +98,10 @@ def post_evaluate(req: DesignRequest):
 
 @app.post("/optimize")
 def post_optimize(cfg: Config):
-    """Run NSGA-II with the fixed population, generations and seed from defaults.py."""
-    return optimize(cfg.task_rect, cfg.grid_spacing, cfg.limits(), cfg.link_min, cfg.link_max,
-                    cfg.max_total, cfg.length_step, cfg.min_coverage)
+    """Run NSGA-II with the fixed population, generations, seed and length step from defaults.py."""
+    return optimize(task_rect=cfg.task_rect, spacing=cfg.grid_spacing, limits=cfg.limits(),
+                    link_min=cfg.link_min, link_max=cfg.link_max, max_total=cfg.max_total,
+                    min_coverage=cfg.min_coverage)
 
 
 @app.post("/ik")

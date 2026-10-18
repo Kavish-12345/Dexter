@@ -4,9 +4,13 @@ Every design is repaired (fitness.repair) and then scored (fitness.evaluate).
 DEAP weights (1, 1, -1): maximise coverage, maximise dexterity, minimise l1 + l2.
 A design that misses the coverage floor is rescored as (-shortfall, -shortfall, max_total + shortfall),
 so it ranks below every feasible design, and closer misses rank higher.
+Every scored design is kept in an archive, and the returned front is the non-dominated set of the
+whole archive: the population (60) is smaller than the true front, so the final population alone
+would discard good designs (found by the brute-force check in validate.py).
 """
 import random
 
+import numpy as np
 from deap import base, creator, tools
 
 from robot.defaults import (CX_PROB, ETA, GENERATIONS, GRID_SPACING, JOINT_LIMITS, LENGTH_STEP,
@@ -31,12 +35,14 @@ def optimize(task_rect=TASK_RECT, spacing=GRID_SPACING, limits=JOINT_LIMITS,
     random.seed(seed)
     x, y = task_grid(*task_rect, spacing)
     log = []
+    archive = {}  # (l1, l2) -> design with its scores, for every design ever evaluated
 
     def fix_and_score(arm):
         # repair in place, then score; keep the raw result on the design for the output
         arm[0], arm[1] = repair(arm[0], arm[1], link_min, link_max, max_total, step)
         arm.result = evaluate(arm[0], arm[1], x, y, limits, link_min, link_max, max_total, min_coverage)
         r = arm.result
+        archive[(arm[0], arm[1])] = {"l1": arm[0], "l2": arm[1], **r}
         if r["feasible"]:
             arm.fitness.values = (r["coverage"], r["dexterity"], r["length"])
         else:
@@ -73,20 +79,42 @@ def optimize(task_rect=TASK_RECT, spacing=GRID_SPACING, limits=JOINT_LIMITS,
         pop = tools.selNSGA2(pop + children, pop_size)
         log_generation(gen, pop)
 
-    return {**_front(pop), "log": log, "evaluations": pop_size * (generations + 1)}
+    return {**_front(archive), "log": log, "evaluations": pop_size * (generations + 1)}
 
 
-def _front(pop):
-    """Feasible non-dominated designs, without duplicates, sorted by length.
-    If no design is feasible, the designs closest to the coverage floor instead (flagged infeasible)."""
-    feasible = [a for a in pop if a.result["feasible"]]
-    if feasible:
-        chosen = tools.sortNondominated(feasible, len(feasible), first_front_only=True)[0]
-    else:
-        best = min(a.result["shortfall"] for a in pop)
-        chosen = [a for a in pop if a.result["shortfall"] == best]
-    unique = {}
-    for a in chosen:
-        unique[(a[0], a[1])] = {"l1": a[0], "l2": a[1], **a.result}
-    designs = sorted(unique.values(), key=lambda d: (d["length"], d["l1"]))
-    return {"front": designs, "feasible_found": bool(feasible)}
+def pareto_front(designs):
+    """Feasible designs that no other feasible design dominates.
+
+    Sorted shortest first (ties: more coverage, then more dexterity), any design that could
+    dominate another comes before it, so each design is only checked against those kept so far.
+    """
+    feasible = sorted((d for d in designs if d["feasible"]),
+                      key=lambda d: (round(d["length"], 9), -d["coverage"], -d["dexterity"]))
+    kept = np.empty((len(feasible), 3))  # coverage, dexterity, length of the kept designs
+    m = 0
+    front = []
+    for d in feasible:
+        c, x, l = d["coverage"], d["dexterity"], round(d["length"], 9)
+        k = kept[:m]
+        beaten = ((k[:, 0] >= c) & (k[:, 1] >= x) & (k[:, 2] <= l)
+                  & ((k[:, 0] > c) | (k[:, 1] > x) | (k[:, 2] < l)))
+        if not beaten.any():
+            kept[m] = (c, x, l)
+            m += 1
+            front.append(d)
+    return front
+
+
+def _front(archive):
+    """Non-dominated feasible designs among everything evaluated, sorted by length.
+    If none is feasible: the designs with the smallest shortfall, and of those only the shortest
+    (flagged infeasible)."""
+    designs = list(archive.values())
+    front = pareto_front(designs)
+    if not front:
+        best = min(d["shortfall"] for d in designs)
+        closest = [d for d in designs if d["shortfall"] == best]
+        shortest = min(round(d["length"], 9) for d in closest)
+        front = [d for d in closest if round(d["length"], 9) == shortest]
+    front.sort(key=lambda d: (d["length"], d["l1"]))
+    return {"front": front, "feasible_found": any(d["feasible"] for d in designs)}

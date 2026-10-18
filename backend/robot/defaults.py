@@ -1,6 +1,6 @@
 """Default design constraints, all in one place.
 
-Every function takes these as parameters, and the user can edit all of them except MAX_POINTS.
+Every function takes these as parameters. The user can edit them through the API except those marked fixed.
 Units are cm and radians.
 """
 import math
@@ -8,7 +8,7 @@ import math
 LINK_MIN = 5.0         # cm
 LINK_MAX = 30.0        # cm
 MAX_TOTAL = 45.0       # cm, limit on l1 + l2
-LENGTH_STEP = 0.1      # cm, designs are snapped to this step
+LENGTH_STEP = 0.1      # cm, fixed (not in the API): designs are snapped to this step
 MIN_COVERAGE = 0.5     # fraction of task points (50%)
 JOINT_LIMITS = (
     (math.radians(-180), math.radians(180)),  # theta1
