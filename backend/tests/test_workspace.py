@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from robot.workspace import DEFAULT_LIMITS, coverage, task_grid, within_limits
+from robot.defaults import JOINT_LIMITS
+from robot.workspace import coverage, task_grid, within_limits
 
 FULL = (np.radians(-180), np.radians(180))
 
@@ -65,7 +66,7 @@ def test_theta1_limit_and_360_rule():
     # l1 = 15, l2 = 5. (0, 15) needs theta1 = 70.8 or 109.2 deg; (0, -15) needs -109.2 or -70.8 deg
     x = np.array([0.0, 0.0])
     y = np.array([15.0, -15.0])
-    t2_lim = DEFAULT_LIMITS[1]
+    t2_lim = JOINT_LIMITS[1]
     _, covered = coverage(15, 5, x, y, limits=((np.radians(0), np.radians(180)), t2_lim))
     np.testing.assert_array_equal(covered, [True, False])
     # limit 0..270: -109.2 + 360 = 250.8 fits, so (0, -15) is now covered

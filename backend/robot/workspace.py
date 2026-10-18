@@ -4,17 +4,11 @@ Units are cm and radians, like kinematics.py.
 """
 import numpy as np
 
+from robot.defaults import GRID_SPACING, JOINT_LIMITS, MAX_POINTS
 from robot.kinematics import TOL, inverse_kinematics
 
-MAX_POINTS = 2500
 
-DEFAULT_LIMITS = (
-    (np.radians(-180), np.radians(180)),  # theta1
-    (np.radians(-150), np.radians(150)),  # theta2
-)
-
-
-def task_grid(x_min, x_max, y_min, y_max, spacing=1.0):
+def task_grid(x_min, x_max, y_min, y_max, spacing=GRID_SPACING):
     """Fixed grid over the task rectangle, edges included. Returns x, y as 1-D arrays."""
     nx = int(round((x_max - x_min) / spacing)) + 1
     ny = int(round((y_max - y_min) / spacing)) + 1
@@ -33,7 +27,7 @@ def within_limits(theta, lo, hi):
     return ok
 
 
-def coverage(l1, l2, x, y, limits=DEFAULT_LIMITS):
+def coverage(l1, l2, x, y, limits=JOINT_LIMITS):
     """Fraction of task points reached by at least one elbow solution within the joint limits.
 
     Returns (fraction, covered), where covered is a boolean array with one entry per point.
