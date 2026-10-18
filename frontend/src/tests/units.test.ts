@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromCm, fromRad, toCm, toRad } from './units'
+import { fromCm, fromRad, toCm, toRad } from '../lib/units'
 
 describe('lengths', () => {
   it('converts each unit to cm (hand values)', () => {

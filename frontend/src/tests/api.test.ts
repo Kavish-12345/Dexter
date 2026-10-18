@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, evaluateDesign, formatApiErrors, getDefaults, type Config } from './api'
+import { ApiError, evaluateDesign, formatApiErrors, getDefaults, type Config } from '../api/client'
 
 const CONFIG: Config = {
   link_min: 5, link_max: 30, max_total: 45, min_coverage: 0.5,

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { Config } from './api'
-import { parse, show, type Kind, type Units } from './fields'
-import type { AngleUnit, LengthUnit } from './units'
+import type { Config } from '../api/client'
+import { parse, show, type Kind, type Units } from '../lib/fields'
+import type { AngleUnit, LengthUnit } from '../lib/units'
 
 const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in']
 const ANGLE_UNITS: AngleUnit[] = ['deg', 'rad']

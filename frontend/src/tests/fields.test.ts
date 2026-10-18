@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, show, type Units } from './fields'
+import { parse, show, type Units } from '../lib/fields'
 
 const CM_DEG: Units = { length: 'cm', angle: 'deg' }
 const IN_RAD: Units = { length: 'in', angle: 'rad' }
