@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Config } from '../api/client'
 import { parse, show, type Kind, type Units } from '../lib/fields'
 import type { AngleUnit, LengthUnit } from '../lib/units'
+import TaskAreaPicker from './TaskAreaPicker'
 
 const LENGTH_UNITS: LengthUnit[] = ['mm', 'cm', 'm', 'in']
 const ANGLE_UNITS: AngleUnit[] = ['deg', 'rad']
@@ -18,65 +19,85 @@ function replace<T extends number[]>(arr: T, i: number, v: number): T {
   return arr.map((x, j) => (j === i ? v : x)) as T
 }
 
-const GROUPS: { title: string; fields: Field[] }[] = [
-  {
-    title: 'Links',
-    fields: [
-      { label: 'Min link', kind: 'length', get: (c) => c.link_min, set: (c, v) => ({ ...c, link_min: v }) },
-      { label: 'Max link', kind: 'length', get: (c) => c.link_max, set: (c, v) => ({ ...c, link_max: v }) },
-      { label: 'Max total', kind: 'length', get: (c) => c.max_total, set: (c, v) => ({ ...c, max_total: v }) },
-      { label: 'Min coverage', kind: 'percent', get: (c) => c.min_coverage, set: (c, v) => ({ ...c, min_coverage: v }) },
-    ],
-  },
-  {
-    title: 'Joint limits',
-    fields: [
-      { label: 'θ1 min', kind: 'angle', get: (c) => c.theta1_limits[0], set: (c, v) => ({ ...c, theta1_limits: replace(c.theta1_limits, 0, v) }) },
-      { label: 'θ1 max', kind: 'angle', get: (c) => c.theta1_limits[1], set: (c, v) => ({ ...c, theta1_limits: replace(c.theta1_limits, 1, v) }) },
-      { label: 'θ2 min', kind: 'angle', get: (c) => c.theta2_limits[0], set: (c, v) => ({ ...c, theta2_limits: replace(c.theta2_limits, 0, v) }) },
-      { label: 'θ2 max', kind: 'angle', get: (c) => c.theta2_limits[1], set: (c, v) => ({ ...c, theta2_limits: replace(c.theta2_limits, 1, v) }) },
-    ],
-  },
-  {
-    title: 'Task area',
-    fields: [
-      { label: 'x min', kind: 'length', get: (c) => c.task_rect[0], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 0, v) }) },
-      { label: 'x max', kind: 'length', get: (c) => c.task_rect[1], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 1, v) }) },
-      { label: 'y min', kind: 'length', get: (c) => c.task_rect[2], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 2, v) }) },
-      { label: 'y max', kind: 'length', get: (c) => c.task_rect[3], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 3, v) }) },
-      { label: 'Grid spacing', kind: 'length', get: (c) => c.grid_spacing, set: (c, v) => ({ ...c, grid_spacing: v }) },
-    ],
-  },
+const LINK_FIELDS: Field[] = [
+  { label: 'Min link', kind: 'length', get: (c) => c.link_min, set: (c, v) => ({ ...c, link_min: v }) },
+  { label: 'Max link', kind: 'length', get: (c) => c.link_max, set: (c, v) => ({ ...c, link_max: v }) },
+  { label: 'Max total', kind: 'length', get: (c) => c.max_total, set: (c, v) => ({ ...c, max_total: v }) },
+  { label: 'Min cover', kind: 'percent', get: (c) => c.min_coverage, set: (c, v) => ({ ...c, min_coverage: v }) },
+]
+
+const JOINT_FIELDS: Field[] = [
+  { label: 'θ1 min', kind: 'angle', get: (c) => c.theta1_limits[0], set: (c, v) => ({ ...c, theta1_limits: replace(c.theta1_limits, 0, v) }) },
+  { label: 'θ1 max', kind: 'angle', get: (c) => c.theta1_limits[1], set: (c, v) => ({ ...c, theta1_limits: replace(c.theta1_limits, 1, v) }) },
+  { label: 'θ2 min', kind: 'angle', get: (c) => c.theta2_limits[0], set: (c, v) => ({ ...c, theta2_limits: replace(c.theta2_limits, 0, v) }) },
+  { label: 'θ2 max', kind: 'angle', get: (c) => c.theta2_limits[1], set: (c, v) => ({ ...c, theta2_limits: replace(c.theta2_limits, 1, v) }) },
+]
+
+const TASK_FIELDS: Field[] = [
+  { label: 'x min', kind: 'length', get: (c) => c.task_rect[0], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 0, v) }) },
+  { label: 'x max', kind: 'length', get: (c) => c.task_rect[1], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 1, v) }) },
+  { label: 'y min', kind: 'length', get: (c) => c.task_rect[2], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 2, v) }) },
+  { label: 'y max', kind: 'length', get: (c) => c.task_rect[3], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 3, v) }) },
+  { label: 'Grid step', kind: 'length', get: (c) => c.grid_spacing, set: (c, v) => ({ ...c, grid_spacing: v }) },
 ]
 
 function unitLabel(kind: Kind, units: Units): string {
   return kind === 'length' ? units.length : kind === 'angle' ? units.angle : '%'
 }
 
-// Keeps the user's raw text while typing; the canonical value lives in App.
-function NumberField(props: {
-  label: string
-  unit: string
-  initial: string
-  invalid: boolean
-  disabled: boolean
-  onText: (t: string) => void
-}) {
+function Segmented<T extends string>(props: { value: T; options: T[]; disabled: boolean; onChange: (v: T) => void }) {
+  return (
+    <div className="flex rounded-md bg-slate-800 p-0.5">
+      {props.options.map((o) => (
+        <button
+          key={o}
+          disabled={props.disabled}
+          onClick={() => props.onChange(o)}
+          className={`flex-1 rounded px-2 py-1 text-xs transition ${
+            o === props.value ? 'bg-sky-500 font-semibold text-slate-950' : 'text-slate-400 hover:text-slate-100'
+          }`}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Compact field: label left, number + unit right. Keeps the raw text while typing;
+// the canonical value lives in App.
+function NumberField(props: { label: string; unit: string; initial: string; invalid: boolean; disabled: boolean; onText: (t: string) => void }) {
   const [text, setText] = useState(props.initial)
   return (
-    <label className="text-sm">
-      {props.label} <span className="text-gray-500">({props.unit})</span>
-      <input
-        value={text}
-        inputMode="decimal"
-        disabled={props.disabled}
-        onChange={(e) => {
-          setText(e.target.value)
-          props.onText(e.target.value)
-        }}
-        className={`mt-1 block w-full rounded border px-2 py-1 disabled:bg-gray-100 ${props.invalid ? 'border-red-500' : 'border-gray-300'}`}
-      />
+    <label
+      className={`flex items-center justify-between gap-1 rounded-md bg-slate-800/70 px-2 py-1.5 text-xs ring-1 transition focus-within:ring-sky-500 ${
+        props.invalid ? 'ring-red-500' : 'ring-transparent'
+      }`}
+    >
+      <span className="whitespace-nowrap text-slate-400">{props.label}</span>
+      <span className="flex items-center gap-1">
+        <input
+          value={text}
+          inputMode="decimal"
+          disabled={props.disabled}
+          onChange={(e) => {
+            setText(e.target.value)
+            props.onText(e.target.value)
+          }}
+          className="w-12 bg-transparent text-right font-mono text-slate-100 outline-none disabled:text-slate-500"
+        />
+        <span className="w-5 text-[10px] text-slate-500">{props.unit}</span>
+      </span>
     </label>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-1.5">
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{title}</h3>
+      {children}
+    </section>
   )
 }
 
@@ -84,15 +105,28 @@ interface Props {
   config: Config
   units: Units
   busy: boolean
-  errors: string[]
+  open: boolean
+  onToggle: () => void
   onConfig: (c: Config) => void
   onUnits: (u: Units) => void
   onOptimize: () => void
   onReset: () => void
 }
 
-export default function TaskSetup({ config, units, busy, errors, onConfig, onUnits, onOptimize, onReset }: Props) {
+export default function TaskSetup({ config, units, busy, open, onToggle, onConfig, onUnits, onOptimize, onReset }: Props) {
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
+  const [rectVersion, setRectVersion] = useState(0) // bumped when the picker redraws the task area
+
+  if (!open) {
+    return (
+      <aside className="flex w-11 shrink-0 flex-col items-center gap-4 border-r border-slate-800 bg-slate-900 py-4">
+        <button onClick={onToggle} title="Open task setup" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400">
+          ☰
+        </button>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 [writing-mode:vertical-rl]">Task setup</span>
+      </aside>
+    )
+  }
 
   function edit(f: Field, text: string) {
     const v = parse(text, f.kind, units)
@@ -110,62 +144,79 @@ export default function TaskSetup({ config, units, busy, errors, onConfig, onUni
     onUnits(u)
   }
 
+  const fields = (list: Field[], extraKey = '') =>
+    list.map((f) => (
+      <NumberField
+        key={`${f.label}-${units.length}-${units.angle}-${extraKey}`} // new units -> field re-derived
+        label={f.label}
+        unit={unitLabel(f.kind, units)}
+        initial={show(f.get(config), f.kind, units)}
+        invalid={invalid.has(f.label)}
+        disabled={busy}
+        onText={(t) => edit(f, t)}
+      />
+    ))
+
   return (
-    <aside className="w-80 shrink-0 space-y-5 overflow-y-auto border-r border-gray-200 p-5">
-      <h2 className="text-lg font-semibold">Task setup</h2>
+    <aside className="flex h-screen w-80 shrink-0 flex-col gap-3 overflow-hidden border-r border-slate-800 bg-slate-900 px-4 py-3">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight text-slate-100">
+            Dex<span className="text-sky-400">ter</span>
+          </h1>
+          <p className="text-[11px] text-slate-500">2-link arm design optimizer</p>
+        </div>
+        <button onClick={onToggle} title="Collapse" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-sky-400">
+          ‹
+        </button>
+      </header>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <label>
-          Length unit
-          <select value={units.length} onChange={(e) => changeUnits({ ...units, length: e.target.value as LengthUnit })}
-            className="mt-1 block w-full rounded border border-gray-300 px-2 py-1">
-            {LENGTH_UNITS.map((u) => <option key={u}>{u}</option>)}
-          </select>
-        </label>
-        <label>
-          Angle unit
-          <select value={units.angle} onChange={(e) => changeUnits({ ...units, angle: e.target.value as AngleUnit })}
-            className="mt-1 block w-full rounded border border-gray-300 px-2 py-1">
-            {ANGLE_UNITS.map((u) => <option key={u}>{u}</option>)}
-          </select>
-        </label>
+      <div className="grid grid-cols-2 gap-2">
+        <Segmented value={units.length} options={LENGTH_UNITS} disabled={busy} onChange={(v) => changeUnits({ ...units, length: v })} />
+        <Segmented value={units.angle} options={ANGLE_UNITS} disabled={busy} onChange={(v) => changeUnits({ ...units, angle: v })} />
       </div>
 
-      {GROUPS.map((g) => (
-        <fieldset key={g.title}>
-          <legend className="mb-2 text-sm font-semibold text-gray-700">{g.title}</legend>
-          <div className="grid grid-cols-2 gap-3">
-            {g.fields.map((f) => (
-              <NumberField
-                key={`${f.label}-${units.length}-${units.angle}`} // new units -> field re-derived
-                label={f.label}
-                unit={unitLabel(f.kind, units)}
-                initial={show(f.get(config), f.kind, units)}
-                invalid={invalid.has(f.label)}
-                disabled={busy}
-                onText={(t) => edit(f, t)}
-              />
-            ))}
-          </div>
-        </fieldset>
-      ))}
+      <Section title="Links">
+        <div className="grid grid-cols-2 gap-1.5">{fields(LINK_FIELDS)}</div>
+      </Section>
 
-      <div className="flex gap-2">
-        <button onClick={onOptimize} disabled={busy || invalid.size > 0}
-          className="flex-1 rounded bg-blue-600 px-3 py-2 font-medium text-white disabled:opacity-50">
-          {busy ? 'Optimizing…' : 'Optimize'}
-        </button>
-        <button onClick={onReset} disabled={busy} className="rounded border border-gray-300 px-3 py-2 disabled:opacity-50">
-          Reset
-        </button>
+      <Section title="Joint limits">
+        <div className="grid grid-cols-2 gap-1.5">{fields(JOINT_FIELDS)}</div>
+      </Section>
+
+      <Section title="Task area · drag to draw">
+        <TaskAreaPicker
+          rect={config.task_rect}
+          reach={config.max_total}
+          step={config.grid_spacing}
+          disabled={busy}
+          onRect={(r) => {
+            onConfig({ ...config, task_rect: r })
+            setRectVersion((v) => v + 1)
+          }}
+        />
+        <div className="grid grid-cols-2 gap-1.5">{fields(TASK_FIELDS, String(rectVersion))}</div>
+      </Section>
+
+      <div className="mt-auto space-y-1.5">
+        {invalid.size > 0 && <p className="text-xs text-red-400">Fix the fields marked red (numbers only).</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={onOptimize}
+            disabled={busy || invalid.size > 0}
+            className="flex-1 rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:opacity-40"
+          >
+            {busy ? 'Optimizing…' : 'Optimize'}
+          </button>
+          <button
+            onClick={onReset}
+            disabled={busy}
+            className="rounded-lg px-3 py-2 text-sm text-slate-300 ring-1 ring-slate-700 transition hover:bg-slate-800 disabled:opacity-40"
+          >
+            Reset
+          </button>
+        </div>
       </div>
-
-      {invalid.size > 0 && <p className="text-sm text-red-600">Fix the fields marked red (numbers only).</p>}
-      {errors.length > 0 && (
-        <ul className="space-y-1 text-sm text-red-600">
-          {errors.map((e) => <li key={e}>{e}</li>)}
-        </ul>
-      )}
     </aside>
   )
 }

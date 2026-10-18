@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark; /* dark scrollbars and select menus */
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
