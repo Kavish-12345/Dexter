@@ -1,4 +1,4 @@
-// Shared settings and helpers for the 3D arm scene.
+// Shared settings and helpers for the 3D arm scenes (app and landing demo).
 // SCARA-style: the robot's x-y plane is the table top. Robot (x, y) in cm -> scene (x * S, height, -y * S),
 // and the joints turn about the vertical scene axis.
 import * as THREE from 'three'
@@ -12,8 +12,21 @@ export const ARC_POINTS = 48 // points in each theta arc
 export type Motion = { from: Pose; to: Pose; start: number } | null
 export type TextKey = 'j1' | 'j2' | 'readout' | 'fps'
 
-export const BODY = { color: '#e2e8f0', metalness: 0.25, roughness: 0.4 } // light "industrial" shell
-export const DARK = { color: '#1e293b', metalness: 0.6, roughness: 0.35 } // joint housings, base
+// Dark studio viewport inside the light app: charcoal table, white robot shell, graphite joints,
+// industrial orange accent; task dots bright enough to read on the dark table.
+export const COLORS = {
+  background: '#151413',
+  table: '#262422',
+  gridCell: '#34312e',
+  gridSection: '#4a4642',
+  accent: '#f97316',
+  covered: '#34d399',
+  missed: '#fb7185',
+  reach: '#78716c',
+  arc: '#fbbf24',
+}
+export const BODY = { color: '#fafaf9', metalness: 0.15, roughness: 0.45 } // white robot shell
+export const DARK = { color: '#52525b', metalness: 0.5, roughness: 0.35 } // graphite joints and base
 
 /** A line whose points are filled in later (trail, theta arcs). */
 export function lineObject(points: number, color: string, opacity = 1): THREE.Line {

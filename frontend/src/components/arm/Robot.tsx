@@ -2,13 +2,23 @@ import { Html, Line } from '@react-three/drei'
 import { useMemo, type ReactNode, type RefObject } from 'react'
 import * as THREE from 'three'
 import type { Pose } from '../../lib/arm'
-import { BODY, DARK } from './scene'
+import { BODY, COLORS, DARK } from './scene'
 
 // Robot frame axes in scene coordinates: x -> +x, y -> -z (away from the viewer), z (joint axis) -> up.
 const X_AXIS = new THREE.Vector3(1, 0, 0)
 const Y_AXIS = new THREE.Vector3(0, 0, -1)
 const Z_AXIS = new THREE.Vector3(0, 1, 0)
-const frameChip = 'pointer-events-none rounded bg-slate-950/80 px-1 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40'
+const frameChip = 'pointer-events-none rounded bg-stone-900/85 px-1 font-mono text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40'
+
+// A text label attached to a point in the scene. Its stacking order is capped so menus and overlays
+// on the page always draw above it (drei's default puts labels above everything).
+function Label({ position, children }: { position: [number, number, number]; children: ReactNode }) {
+  return (
+    <Html position={position} center zIndexRange={[10, 0]}>
+      {children}
+    </Html>
+  )
+}
 
 // A coordinate frame like in the textbook: x red, y green, z blue (z is the vertical joint axis).
 function Frame({ size, lift, label }: { size: number; lift: number; label: string }) {
@@ -19,9 +29,9 @@ function Frame({ size, lift, label }: { size: number; lift: number; label: strin
       <arrowHelper args={[X_AXIS, origin, size, '#ef4444', head, head * 0.6]} />
       <arrowHelper args={[Y_AXIS, origin, size, '#22c55e', head, head * 0.6]} />
       <arrowHelper args={[Z_AXIS, origin, size * 0.6, '#3b82f6', head, head * 0.6]} />
-      <Html position={[-size * 0.25, lift, size * 0.25]} center>
+      <Label position={[-size * 0.25, lift, size * 0.25]}>
         <span className={frameChip}>{label}</span>
-      </Html>
+      </Label>
     </group>
   )
 }
@@ -45,7 +55,7 @@ export default function Robot(props: Props) {
   const { L1, L2, k, height, ghost, labels, frames } = props
   const mat = (look: typeof BODY) =>
     ghost ? (
-      <meshStandardMaterial color={ghost === 'ok' ? '#94a3b8' : '#ef4444'} transparent opacity={0.25} depthWrite={false} />
+      <meshStandardMaterial color={ghost === 'ok' ? '#a8a29e' : COLORS.missed} transparent opacity={0.25} depthWrite={false} />
     ) : (
       <meshStandardMaterial {...look} />
     )
@@ -53,7 +63,7 @@ export default function Robot(props: Props) {
     !ghost && (
       <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[r * 1.02, r * 0.09, 12, 48]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={2.5} toneMapped={false} />
+        <meshStandardMaterial color={COLORS.accent} emissive={COLORS.accent} emissiveIntensity={0.6} />
       </mesh>
     )
   const hr = 0.09 * k // joint housing radius
@@ -70,7 +80,7 @@ export default function Robot(props: Props) {
           <primitive object={frames.arc1} />
         </>
       )}
-      {labels && <Html position={[-0.2 * k, 0.12 * k, 0]} center>{labels.j1}</Html>}
+      {labels && <Label position={[-0.2 * k, 0.12 * k, 0]}>{labels.j1}</Label>}
 
       <group ref={props.joint1} rotation={[0, props.pose.t1, 0]}>
         {/* shoulder (J1) */}
@@ -87,11 +97,11 @@ export default function Robot(props: Props) {
         {!ghost && (
           <mesh position={[L1 / 2, 0.041 * k, 0]}>
             <boxGeometry args={[L1 * 0.7, 0.003, 0.025 * k]} />
-            <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={0.4} />
+            <meshStandardMaterial color={COLORS.accent} emissive={COLORS.accent} emissiveIntensity={0.3} />
           </mesh>
         )}
-        {labels && <Html position={[L1 / 2, 0.12 * k, 0]} center>{labels.l1}</Html>}
-        {labels && <Html position={[L1, 0.22 * k, 0]} center>{labels.j2}</Html>}
+        {labels && <Label position={[L1 / 2, 0.12 * k, 0]}>{labels.l1}</Label>}
+        {labels && <Label position={[L1, 0.22 * k, 0]}>{labels.j2}</Label>}
         {frames && (
           <>
             <group position={[0, 0.001, 0]}>
@@ -129,7 +139,7 @@ export default function Robot(props: Props) {
           {!ghost && (
             <mesh position={[L2, -tool, 0]}>
               <coneGeometry args={[0.022 * k, 0.04 * k, 20]} />
-              <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={1.5} toneMapped={false} />
+              <meshStandardMaterial color={COLORS.accent} emissive={COLORS.accent} emissiveIntensity={0.6} />
             </mesh>
           )}
           {frames && (
@@ -140,8 +150,8 @@ export default function Robot(props: Props) {
               </group>
             </>
           )}
-          {labels && <Html position={[L2 / 2, 0.1 * k, 0]} center>{labels.l2}</Html>}
-          {labels && <Html position={[L2, 0.24 * k, 0]} center>{labels.tool}</Html>}
+          {labels && <Label position={[L2 / 2, 0.1 * k, 0]}>{labels.l2}</Label>}
+          {labels && <Label position={[L2, 0.24 * k, 0]}>{labels.tool}</Label>}
         </group>
       </group>
     </group>
