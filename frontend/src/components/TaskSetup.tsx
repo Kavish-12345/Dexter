@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Config } from '../api/client'
 import { parse, show, type Kind, type Units } from '../lib/fields'
 import type { AngleUnit, LengthUnit } from '../lib/units'
+import Logo from './Logo'
 import TaskAreaModal from './TaskAreaModal'
 import TaskAreaPicker from './TaskAreaPicker'
 
@@ -182,10 +183,10 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
         }`}
       >
       <header className="flex items-center justify-between">
-        <button onClick={onHome} title="Back to the home page" className="flex items-center gap-2 text-left">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900 text-xs font-bold text-white">D</span>
+        <button onClick={onHome} title="Back to the home page" className="flex items-center gap-1.5 text-left">
+          <Logo size={34} />
           <span>
-            <span className="block text-sm font-bold tracking-tight text-stone-900">Dexter</span>
+            <span className="block text-base font-extrabold tracking-tight text-stone-900">Dexter</span>
             <span className="block text-[11px] text-stone-500">2-link arm design optimizer</span>
           </span>
         </button>

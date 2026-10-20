@@ -80,7 +80,7 @@ export default function DemoArm() {
 
   return (
     <Canvas dpr={[1, 1.5]} camera={{ position: [1.2 * k, 1.5 * k, 1.9 * k], fov: 38 }}>
-      <Stage k={k} height={height} tableSize={3 * k} />
+      <Stage k={k} height={height} tableSize={7 * k} />
       <TaskPoints task={task} r={0.012 * k} />
       <primitive object={trail} />
       <Robot L1={L1 * S} L2={L2 * S} k={k} height={height} pose={POSES[0]} joint1={joint1} joint2={joint2} />

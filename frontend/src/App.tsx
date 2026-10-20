@@ -7,7 +7,10 @@ import DexterityTab from './components/charts/DexterityTab'
 import ParetoTab from './components/charts/ParetoTab'
 import WorkspaceTab from './components/charts/WorkspaceTab'
 import DesignSelect from './components/DesignSelect'
+import HowItWorks from './components/landing/HowItWorks'
 import Landing from './components/landing/Landing'
+import SiteHeader, { type SitePage } from './components/landing/SiteHeader'
+import TheMath from './components/landing/TheMath'
 import TaskSetup from './components/TaskSetup'
 import { defaultDesign } from './lib/arm'
 import type { Units } from './lib/fields'
@@ -37,7 +40,7 @@ export default function App() {
   const [selected, setSelected] = useState(0) // index into run.result.front
   const [panelOpen, setPanelOpen] = useState(true)
   const [tab, setTab] = useState<Tab>('3D Arm')
-  const [page, setPage] = useState<'landing' | 'app'>('landing')
+  const [page, setPage] = useState<SitePage | 'app'>('landing')
 
   useEffect(() => {
     getDefaults()
@@ -74,7 +77,17 @@ export default function App() {
 
   const design = run?.result.front[selected]
 
-  if (page === 'landing') return <Landing onStart={() => setPage('app')} />
+  // Public pages share one header that stays mounted, so its underline can slide between links.
+  if (page !== 'app') {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        <SiteHeader page={page} onNavigate={setPage} />
+        {page === 'landing' && <Landing onStart={() => setPage('app')} />}
+        {page === 'how' && <HowItWorks onStart={() => setPage('app')} />}
+        {page === 'math' && <TheMath onStart={() => setPage('app')} />}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-stone-50 text-stone-900">

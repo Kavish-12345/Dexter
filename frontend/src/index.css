@@ -19,6 +19,30 @@ body {
   @apply bg-stone-50 text-stone-900 antialiased;
 }
 
+/* Every clickable thing shows the hand cursor (Tailwind v4 no longer does this for buttons);
+   disabled controls show "not allowed" instead. */
+@layer base {
+  button:not(:disabled),
+  [role='button'],
+  [role='option'],
+  a[href],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+
+  /* No browser focus box anywhere (mouse or keyboard). Text fields keep their own orange ring. */
+  :focus,
+  :focus-visible {
+    outline: none;
+  }
+}
+
 /* Landing page animation: fade up on load. */
 @keyframes fade-up {
   from {
@@ -35,7 +59,39 @@ body {
   animation: fade-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* Logo: the arm reaches towards the "D" and back (components/Logo.tsx). The shoulder tilts forward
+   while the elbow opens, so the gripper moves out towards the letter. */
+@keyframes logo-shoulder {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes logo-elbow {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-12deg);
+  }
+}
+
+.logo-shoulder {
+  animation: logo-shoulder 2.8s ease-in-out infinite;
+}
+
+.logo-elbow {
+  animation: logo-elbow 2.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .logo-shoulder,
+  .logo-elbow,
   .fade-up {
     animation: none;
     transition: none;
