@@ -120,17 +120,6 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
   const [rectVersion, setRectVersion] = useState(0) // bumped when the drawing board changes the task area
   const [drawing, setDrawing] = useState(false) // task-area modal open
 
-  if (!open) {
-    return (
-      <aside className="flex w-12 shrink-0 flex-col items-center gap-4 border-r border-stone-200 bg-white py-4">
-        <button onClick={onToggle} title="Open task setup" className="rounded-md p-1.5 text-stone-500 hover:bg-stone-100 hover:text-orange-600">
-          ☰
-        </button>
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 [writing-mode:vertical-rl]">Task setup</span>
-      </aside>
-    )
-  }
-
   function edit(f: Field, text: string) {
     const v = parse(text, f.kind, units)
     setInvalid((prev) => {
@@ -161,7 +150,37 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
     ))
 
   return (
-    <aside className="flex h-screen w-80 shrink-0 flex-col gap-3 overflow-hidden border-r border-stone-200 bg-white px-4 py-3">
+    // One panel that animates its width between collapsed (w-12) and open (w-80); the two layers
+    // inside cross-fade, and the open layer keeps a fixed width so nothing reflows while it slides.
+    <aside
+      className={`relative h-screen shrink-0 overflow-hidden border-r border-stone-200 bg-white transition-[width] duration-300 ease-out ${
+        open ? 'w-80' : 'w-12'
+      }`}
+    >
+      {/* collapsed bar: the menu button sits in a strip as tall as the tab bar, so they line up */}
+      <div
+        className={`absolute inset-y-0 left-0 flex w-12 flex-col items-center transition-opacity duration-200 ${
+          open ? 'pointer-events-none opacity-0' : 'opacity-100 delay-150'
+        }`}
+      >
+        <div className="flex h-10.25 w-full items-center justify-center border-b border-stone-200">
+          <button onClick={onToggle} title="Open task setup" className="rounded-md p-1.5 text-stone-500 hover:bg-stone-100 hover:text-orange-600">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+              <path d="M3 5.5h14M3 10h14M3 14.5h14" />
+            </svg>
+          </button>
+        </div>
+        <span className="mt-4 rotate-180 text-[11px] font-bold uppercase tracking-widest text-stone-500 [writing-mode:vertical-rl]">
+          Task setup
+        </span>
+      </div>
+
+      {/* open panel */}
+      <div
+        className={`flex h-full w-80 flex-col gap-3 px-4 py-3 transition-opacity duration-200 ${
+          open ? 'opacity-100 delay-150' : 'pointer-events-none opacity-0'
+        }`}
+      >
       <header className="flex items-center justify-between">
         <button onClick={onHome} title="Back to the home page" className="flex items-center gap-2 text-left">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-stone-900 text-xs font-bold text-white">D</span>
@@ -203,20 +222,6 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
         <div className="grid grid-cols-2 gap-1.5">{fields(TASK_FIELDS, String(rectVersion))}</div>
       </Section>
 
-      {drawing && (
-        <TaskAreaModal
-          rect={config.task_rect}
-          reach={config.max_total}
-          step={config.grid_spacing}
-          units={units}
-          onClose={() => setDrawing(false)}
-          onApply={(r) => {
-            onConfig({ ...config, task_rect: r })
-            setRectVersion((v) => v + 1)
-          }}
-        />
-      )}
-
       <div className="mt-auto space-y-1.5">
         {invalid.size > 0 && <p className="text-xs text-rose-600">Fix the fields marked red (numbers only).</p>}
         <div className="flex gap-2">
@@ -236,6 +241,21 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
           </button>
         </div>
       </div>
+      </div>
+
+      {drawing && (
+        <TaskAreaModal
+          rect={config.task_rect}
+          reach={config.max_total}
+          step={config.grid_spacing}
+          units={units}
+          onClose={() => setDrawing(false)}
+          onApply={(r) => {
+            onConfig({ ...config, task_rect: r })
+            setRectVersion((v) => v + 1)
+          }}
+        />
+      )}
     </aside>
   )
 }

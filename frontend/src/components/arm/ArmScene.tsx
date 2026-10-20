@@ -1,5 +1,5 @@
-import { Html, Line, OrbitControls } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
+import { Line, OrbitControls } from '@react-three/drei'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -19,6 +19,23 @@ const chip = 'pointer-events-none whitespace-nowrap rounded-md bg-stone-900/85 p
 const card = 'rounded-lg bg-stone-900/80 ring-1 ring-white/10 backdrop-blur'
 const button = `${card} px-2.5 py-1 text-xs font-medium text-stone-300 transition hover:text-white`
 
+const PANEL_COVER = 320 - 48 // px of the canvas the open settings panel covers (w-80 minus the w-12 bar)
+
+// Keeps the scene centred in the part of the canvas the panel does not cover: shifts the camera's
+// image sideways (a view offset, no canvas resize), gliding with the panel's slide.
+function ViewShift({ panelOpen }: { panelOpen: boolean }) {
+  const shift = useRef(panelOpen ? PANEL_COVER / 2 : 0)
+  useFrame((state, delta) => {
+    const target = panelOpen ? PANEL_COVER / 2 : 0
+    shift.current += (target - shift.current) * Math.min(1, delta * 12) // eases in about 0.3 s
+    const { width, height } = state.size
+    const camera = state.camera as THREE.PerspectiveCamera
+    camera.setViewOffset(width, height, -shift.current, 0, width, height)
+    camera.updateProjectionMatrix()
+  })
+  return null
+}
+
 function errorText(e: unknown): string {
   return e instanceof ApiError ? e.messages.join('; ') : String(e)
 }
@@ -27,11 +44,12 @@ interface Props {
   config: Config // the config the design was optimized with
   design: Design
   units: Units
+  panelOpen: boolean // settings panel open: keep the scene centred in the uncovered part
 }
 
 // SCARA-style view of the design: the two-link arm works over a table, the task points lie on the
 // table top, and clicking a point sends the tool there along joint-space cubic trajectories.
-export default function ArmScene({ config, design, units }: Props) {
+export default function ArmScene({ config, design, units, panelOpen }: Props) {
   const { l1, l2 } = design
   const [task, setTask] = useState<Task | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -101,7 +119,11 @@ export default function ArmScene({ config, design, units }: Props) {
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden" style={{ backgroundColor: COLORS.background }}>
+      {/* The canvas keeps the full width it has with the settings panel collapsed (window minus the 48 px
+          bar), anchored to the right. Opening the panel just covers its left part, so the canvas never
+          resizes and the scene never shifts while the panel slides. */}
+      <div className="absolute inset-y-0 right-0" style={{ width: 'calc(100vw - 3rem)' }}>
       <Canvas dpr={[1, 1.5]} camera={{ position: camera, fov: 40, near: 0.01, far: 200 }}>
         <Stage k={k} height={height} tableSize={tableSize} view={D} />
 
@@ -116,12 +138,6 @@ export default function ArmScene({ config, design, units }: Props) {
           lineWidth={1.5}
         />
         <Line points={reachCircle} color={COLORS.reach} lineWidth={1} dashed dashSize={0.04 * k} gapSize={0.03 * k} />
-        {/* the circle's tag, at its front edge (nearest the viewer) */}
-        <Html position={[0, 0.01, k]} center zIndexRange={[10, 0]}>
-          <span className="pointer-events-none whitespace-nowrap rounded-md bg-stone-900/85 px-1.5 py-0.5 text-[10px] font-medium text-stone-300 ring-1 ring-white/10">
-            Reach of this arm · {show(R, 'length', units)} {units.length}
-          </span>
-        </Html>
         {task && <TaskPoints task={task} r={Math.min(config.grid_spacing * S * 0.2, 0.012 * k)} onPick={(i) => moveTo(task.x[i], task.y[i])} />}
 
         {/* where the tool is going, and the path it traced */}
@@ -156,7 +172,9 @@ export default function ArmScene({ config, design, units }: Props) {
           joint1={joint1} joint2={joint2} trail={trail} arcs={arcs} texts={texts} units={units} />
         <OrbitControls ref={controls} makeDefault target={look} enableDamping maxPolarAngle={Math.PI / 2 - 0.05}
           minDistance={0.35 * D} maxDistance={4.2 * D} />
+        <ViewShift panelOpen={panelOpen} />
       </Canvas>
+      </div>
 
       {/* overlays */}
       <div className={`pointer-events-none absolute left-4 top-4 px-3 py-2 font-mono text-xs text-stone-100 ${card}`}>
@@ -182,7 +200,8 @@ export default function ArmScene({ config, design, units }: Props) {
         {message && <p className={`inline-block px-2.5 py-1 text-stone-100 ${card}`}>{message}</p>}
         <p className="text-[11px] text-stone-400">
           <span className="text-emerald-400">●</span> covered <span className="ml-2 text-rose-400">●</span> not covered
-          <span className="ml-2 text-orange-400">━</span> tool path · dashed: reach l1 + l2{showGhost && ' · ghost: other elbow'}
+          <span className="ml-2 text-orange-400">━</span> tool path · dashed circle: reach of this arm (l1 + l2 ={' '}
+          <span className="font-mono text-stone-200">{show(R, 'length', units)} {units.length}</span>){showGhost && ' · ghost: other elbow'}
           {showFrames && (
             <>
               {' '}· frames <span className="text-red-400">x</span> <span className="text-green-400">y</span> <span className="text-blue-400">z</span> (joint axis),{' '}

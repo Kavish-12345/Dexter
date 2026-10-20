@@ -13,6 +13,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "plotly.js-dist-min": "^4.1.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "^0.186.1"
@@ -21,6 +22,7 @@
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
+    "@types/plotly.js": "^3.0.15",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@types/three": "^0.186.0",

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getDefaults, optimize, type Config, type OptimizeResult } from './api/client'
 import ArmScene from './components/arm/ArmScene'
+import ComparisonTab from './components/charts/ComparisonTab'
+import ConvergenceTab from './components/charts/ConvergenceTab'
+import DexterityTab from './components/charts/DexterityTab'
+import ParetoTab from './components/charts/ParetoTab'
+import WorkspaceTab from './components/charts/WorkspaceTab'
 import DesignSelect from './components/DesignSelect'
 import Landing from './components/landing/Landing'
 import TaskSetup from './components/TaskSetup'
@@ -20,7 +25,6 @@ interface Run {
 
 const TABS = ['3D Arm', 'Workspace', 'Dexterity', 'Pareto', 'Convergence', 'Comparison'] as const
 type Tab = (typeof TABS)[number]
-const READY: Tab[] = ['3D Arm'] // the other tabs arrive in steps 8d and 8e
 
 export default function App() {
   const [defaults, setDefaults] = useState<Config | null>(null)
@@ -91,9 +95,7 @@ export default function App() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              disabled={!READY.includes(t)}
-              title={READY.includes(t) ? undefined : 'Coming in the next step'}
-              className={`-mb-px border-b-2 px-3 py-3 text-xs font-medium transition ${
+              className={`-mb-px border-b-2 px-3 py-3 text-[11px] leading-4 font-bold uppercase tracking-widest transition ${
                 t === tab ? 'border-orange-500 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-900 disabled:opacity-40'
               }`}
             >
@@ -112,7 +114,18 @@ export default function App() {
 
         <div className="relative min-h-0 flex-1">
           {busy ? null : run && design ? ( // the old scene is hidden while a new run computes
-            <ArmScene key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} />
+            <>
+              {tab === '3D Arm' && (
+                <ArmScene key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} panelOpen={panelOpen} />
+              )}
+              {tab === 'Workspace' && <WorkspaceTab key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} />}
+              {tab === 'Dexterity' && <DexterityTab key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} />}
+              {tab === 'Pareto' && <ParetoTab front={run.result.front} selected={selected} units={units} onSelect={setSelected} />}
+              {tab === 'Convergence' && <ConvergenceTab result={run.result} />}
+              {tab === 'Comparison' && (
+                <ComparisonTab config={run.config} front={run.result.front} selected={selected} units={units} onSelect={setSelected} />
+              )}
+            </>
           ) : (
             <div className="flex h-full items-center justify-center">
               <div className="max-w-sm rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-stone-200">
