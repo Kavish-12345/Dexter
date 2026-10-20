@@ -14,6 +14,7 @@ import TheMath from './components/landing/TheMath'
 import TaskSetup from './components/TaskSetup'
 import { defaultDesign } from './lib/arm'
 import type { Units } from './lib/fields'
+import { load, save } from './lib/persist'
 
 function messagesOf(e: unknown): string[] {
   return e instanceof ApiError ? e.messages : [String(e)]
@@ -31,25 +32,43 @@ type Tab = (typeof TABS)[number]
 
 export default function App() {
   const [defaults, setDefaults] = useState<Config | null>(null)
-  const [config, setConfig] = useState<Config | null>(null) // canonical: cm, rad, fraction
-  const [units, setUnits] = useState<Units>({ length: 'mm', angle: 'deg' })
+  // Everything below except busy/errors/defaults is restored from localStorage, so a reload
+  // returns to the same page, settings and last result (lib/persist.ts).
+  const [config, setConfig] = useState<Config | null>(() => load<Config | null>('config', null)) // canonical: cm, rad, fraction
+  const [units, setUnits] = useState<Units>(() => load<Units>('units', { length: 'mm', angle: 'deg' }))
   const [version, setVersion] = useState(0) // bumped on reset so the form re-derives its fields
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
-  const [run, setRun] = useState<Run | null>(null)
-  const [selected, setSelected] = useState(0) // index into run.result.front
-  const [panelOpen, setPanelOpen] = useState(true)
-  const [tab, setTab] = useState<Tab>('3D Arm')
-  const [page, setPage] = useState<SitePage | 'app'>('landing')
+  const [run, setRun] = useState<Run | null>(() => load<Run | null>('run', null))
+  const [selected, setSelected] = useState(() => load('selected', 0)) // index into run.result.front
+  const [panelOpen, setPanelOpen] = useState(() => load('panelOpen', true))
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = load<string>('tab', '3D Arm')
+    return (TABS as readonly string[]).includes(t) ? (t as Tab) : '3D Arm'
+  })
+  const [page, setPage] = useState<SitePage | 'app'>(() => load<SitePage | 'app'>('page', 'landing'))
 
   useEffect(() => {
     getDefaults()
       .then((d) => {
         setDefaults(d)
-        setConfig(d)
+        setConfig((c) => c ?? d) // keep the restored settings if there are any
       })
       .catch((e) => setErrors(messagesOf(e)))
   }, [])
+
+  useEffect(() => save('config', config), [config])
+  useEffect(() => save('units', units), [units])
+  useEffect(() => save('run', run), [run])
+  useEffect(() => save('selected', selected), [selected])
+  useEffect(() => save('panelOpen', panelOpen), [panelOpen])
+  useEffect(() => save('tab', tab), [tab])
+  useEffect(() => save('page', page), [page])
+
+  // a restored index can be stale if the saved run changed shape; fall back to the first design
+  useEffect(() => {
+    if (run && selected >= run.result.front.length) setSelected(0)
+  }, [run, selected])
 
   async function runOptimize() {
     if (!config) return
@@ -70,8 +89,14 @@ export default function App() {
 
   function reset() {
     if (!defaults) return
+    // a full fresh start: default settings and no result (the saved copies update with the state)
     setConfig(defaults)
     setErrors([])
+    setRun(null)
+    setSelected(0)
+    setUnits({ length: 'mm', angle: 'deg' })
+    setTab('3D Arm')
+    setPanelOpen(true)
     setVersion((v) => v + 1)
   }
 
