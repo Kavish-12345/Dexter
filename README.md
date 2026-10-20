@@ -8,8 +8,6 @@ Dexter finds the best link lengths (l1, l2) for a two-link planar robot arm. You
 - **Dexterity** (maximise): how far the arm stays from a singularity, |det J| / (l1·l2) = |sin θ2|.
 - **Size** (minimise): the total link length l1 + l2.
 
-ME-314 Robotics & Control course project.
-
 ![Landing page](docs/screenshots/landing.png)
 
 ## Features
@@ -20,11 +18,19 @@ ME-314 Robotics & Control course project.
 - Explainer pages: How it works and The math.
 - Results checked against a brute-force search of all 51,676 designs.
 
+## Screenshots
+
+**3D arm view:** the selected design reaching a task point, with its coordinate frames and joint angles.
+
 ![3D arm view](docs/screenshots/arm-3d.png)
 
-| Pareto front | Workspace |
-| :---: | :---: |
-| ![Pareto front](docs/screenshots/pareto.png) | ![Workspace](docs/screenshots/workspace.png) |
+**Pareto front:** coverage against total length for every non-dominated design, coloured by dexterity.
+
+![Pareto front](docs/screenshots/pareto.png)
+
+**Workspace:** the area the tool can reach within the joint limits, over the task grid.
+
+![Workspace](docs/screenshots/workspace.png)
 
 ## How it works
 
