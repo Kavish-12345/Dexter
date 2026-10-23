@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Config, Design, IkSolution } from '../api/client'
-import { defaultDesign, forwardKinematics, pickSolution, shiftIntoLimits } from '../lib/arm'
+import { defaultDesign, forwardKinematics, moveDuration, pickSolution, shiftIntoLimits } from '../lib/arm'
 
 const CONFIG: Config = {
   link_min: 5, link_max: 30, max_total: 45, min_coverage: 0.5,
   theta1_limits: [-Math.PI, Math.PI], theta2_limits: [-2.618, 2.618],
-  task_rect: [10, 25, 5, 20], grid_spacing: 1,
+  task_rects: [[10, 25, 5, 20]], grid_spacing: 1,
 }
 
 // /ik for l1 = l2 = 10 at (10, 10): elbow +1 -> (0, 90 deg), elbow -1 -> (90, -90 deg)
@@ -42,6 +42,14 @@ describe('pickSolution', () => {
     const { best, other } = pickSolution(SOLUTIONS, { t1: 1.4, t2: -1.4 }, limited)
     expect(best?.pose.t1).toBeCloseTo(0)
     expect(other?.ok).toBe(false)
+  })
+})
+
+describe('moveDuration', () => {
+  it('scales with the largest joint turn, within the min and max time', () => {
+    expect(moveDuration({ t1: 0, t2: 0 }, { t1: 2, t2: 0.5 }, 2, 0.5, 3)).toBeCloseTo(1) // 2 rad at 2 rad/s
+    expect(moveDuration({ t1: 0, t2: 0 }, { t1: 0.1, t2: 0 }, 2, 0.5, 3)).toBeCloseTo(0.5) // floor
+    expect(moveDuration({ t1: 0, t2: 0 }, { t1: 10, t2: 0 }, 2, 0.5, 3)).toBeCloseTo(3) // ceiling
   })
 })
 

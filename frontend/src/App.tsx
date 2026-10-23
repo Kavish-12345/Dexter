@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ApiError, getDefaults, optimize, type Config, type OptimizeResult } from './api/client'
 import ArmScene from './components/arm/ArmScene'
 import ComparisonTab from './components/charts/ComparisonTab'
-import ConvergenceTab from './components/charts/ConvergenceTab'
 import DexterityTab from './components/charts/DexterityTab'
 import ParetoTab from './components/charts/ParetoTab'
 import WorkspaceTab from './components/charts/WorkspaceTab'
@@ -27,7 +26,7 @@ interface Run {
   result: OptimizeResult
 }
 
-const TABS = ['3D Arm', 'Workspace', 'Dexterity', 'Pareto', 'Convergence', 'Comparison'] as const
+const TABS = ['3D Arm', 'Workspace', 'Dexterity', 'Pareto', 'Comparison'] as const
 type Tab = (typeof TABS)[number]
 
 export default function App() {
@@ -159,7 +158,6 @@ export default function App() {
               {tab === 'Workspace' && <WorkspaceTab key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} />}
               {tab === 'Dexterity' && <DexterityTab key={`${design.l1}-${design.l2}`} config={run.config} design={design} units={units} />}
               {tab === 'Pareto' && <ParetoTab front={run.result.front} selected={selected} units={units} onSelect={setSelected} />}
-              {tab === 'Convergence' && <ConvergenceTab result={run.result} />}
               {tab === 'Comparison' && (
                 <ComparisonTab config={run.config} front={run.result.front} selected={selected} units={units} onSelect={setSelected} />
               )}

@@ -8,10 +8,12 @@ Units are cm and radians. Every limit defaults to robot/defaults.py and can be o
 """
 import math
 
+import numpy as np
+
 from robot.defaults import JOINT_LIMITS, LENGTH_STEP, LINK_MAX, LINK_MIN, MAX_TOTAL, MIN_COVERAGE
 from robot.dexterity import dexterity
 from robot.kinematics import TOL
-from robot.workspace import coverage
+from robot.workspace import area_coverage, coverage
 
 
 def _clip(value, lo, hi):
@@ -70,15 +72,24 @@ def repair(l1, l2, link_min=LINK_MIN, link_max=LINK_MAX, max_total=MAX_TOTAL, st
 
 
 def evaluate(l1, l2, x, y, limits=JOINT_LIMITS, link_min=LINK_MIN, link_max=LINK_MAX,
-             max_total=MAX_TOTAL, min_coverage=MIN_COVERAGE):
+             max_total=MAX_TOTAL, min_coverage=MIN_COVERAGE, area=None):
     """Score one design exactly as given; it is not repaired here.
 
-    x, y are the task grid points (built once per run with task_grid).
-    shortfall = max(0, min_coverage - coverage): how far the design misses the coverage floor.
+    x, y are the task points (built once per run with task_points); area gives the task area of
+    each point (None: all points are one area).
+    The coverage objective is the mean of the areas' coverages, so every area counts equally however
+    many points it has. The coverage floor applies to every area separately, so no area can be left out:
+    shortfall = max over areas of max(0, min_coverage - area coverage).
+    With one area both reduce to the plain coverage of its points.
     """
-    cov, covered = coverage(l1, l2, x, y, limits)
+    if area is None:
+        area = np.zeros(len(x), dtype=int)
+    n_areas = int(area.max()) + 1
+    _, covered = coverage(l1, l2, x, y, limits)
     dex, _ = dexterity(l1, l2, x, y, covered)
-    shortfall = max(0.0, min_coverage - cov)
+    per_area = area_coverage(covered, area, n_areas)
+    cov = sum(per_area) / n_areas
+    shortfall = max(max(0.0, min_coverage - c) for c in per_area)
     feasible = _within_bounds(l1, l2, link_min, link_max, max_total) and shortfall == 0.0
     return {
         "coverage": cov,
@@ -86,4 +97,5 @@ def evaluate(l1, l2, x, y, limits=JOINT_LIMITS, link_min=LINK_MIN, link_max=LINK
         "length": l1 + l2,
         "feasible": feasible,
         "shortfall": shortfall,
+        "area_coverage": per_area,
     }

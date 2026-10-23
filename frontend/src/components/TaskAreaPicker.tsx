@@ -1,17 +1,20 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import type { Rect } from '../api/client'
 import type { Point } from '../lib/arm'
 import { show, type Units } from '../lib/fields'
-import { rectFromDrag } from '../lib/taskArea'
+import { AREA_COLORS, AREA_NAMES, rectFromDrag, rectsOverlap } from '../lib/taskArea'
 
-export type Rect = [number, number, number, number]
+export type { Rect }
 
 interface Props {
-  rect: Rect // x_min, x_max, y_min, y_max in cm
+  rects: Rect[] // task areas A, B, ...: x_min, x_max, y_min, y_max in cm
+  active?: number // edit mode: the selected area (rects.length: a new area, drawn by the next drag)
   reach: number // Max total (cm): the longest allowed arm
   step: number // grid spacing (cm): corners snap to it
   units: Units
   mode: 'preview' | 'edit' // small read-only preview in the panel, or the drawing board in the modal
-  onRect?: (r: Rect) => void
+  onChange?: (rects: Rect[], active: number) => void // edit mode: new areas and selection
+  onNext?: () => void // edit mode: shows a "✓ Next" tick above the selected area
 }
 
 /** A round grid/label step (cm) for a view of this size. */
@@ -20,9 +23,10 @@ function niceStep(reach: number): number {
 }
 
 // Top view of the table, i.e. the arm's plane (x right, y away from you, base at the origin).
-// In edit mode: drag to draw the task area (clamped to the board); the area beyond Max total is
+// Edit mode: drag anywhere on the board to draw the selected area (it replaces that area's old
+// rectangle). Corners snap to the grid step and stay on the board; the area beyond Max total is
 // shaded because no allowed design can reach it.
-export default function TaskAreaPicker({ rect, reach, step, units, mode, onRect }: Props) {
+export default function TaskAreaPicker({ rects, active = 0, reach, step, units, mode, onChange, onNext }: Props) {
   const svg = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<{ a: Point; b: Point } | null>(null)
   const edit = mode === 'edit'
@@ -51,10 +55,27 @@ export default function TaskAreaPicker({ rect, reach, step, units, mode, onRect 
     return { x: clamp(p.x), y: clamp(-p.y) }
   }
 
-  const shown = drag ? rectFromDrag(drag.a, drag.b, step) ?? rect : rect
-  const [x1, x2, y1, y2] = shown
+  // The areas as they look right now, with the drag applied.
+  const shown: Rect[] = [...rects]
+  const drawing = drag ? rectFromDrag(drag.a, drag.b, step) : null
+  if (drawing) shown[active] = drawing
+  const clashes = new Set<number>() // areas overlapping another one: outlined red
+  for (let i = 0; i < shown.length; i++) {
+    for (let j = i + 1; j < shown.length; j++) {
+      if (rectsOverlap(shown[i], shown[j])) {
+        clashes.add(i)
+        clashes.add(j)
+      }
+    }
+  }
+
   const label = (v: number) => show(v, 'length', units)
   const font = R * 0.035
+
+  function finish() {
+    if (drawing) onChange?.(shown, active)
+    setDrag(null)
+  }
 
   return (
     <svg
@@ -68,13 +89,7 @@ export default function TaskAreaPicker({ rect, reach, step, units, mode, onRect 
         setDrag({ a: p, b: p })
       }}
       onPointerMove={(e) => drag && setDrag({ a: drag.a, b: toWorld(e) })}
-      onPointerUp={() => {
-        if (drag) {
-          const r = rectFromDrag(drag.a, drag.b, step)
-          if (r) onRect?.(r)
-        }
-        setDrag(null)
-      }}
+      onPointerUp={finish}
     >
       {edit && (
         <defs>
@@ -97,10 +112,27 @@ export default function TaskAreaPicker({ rect, reach, step, units, mode, onRect 
         {edit && <rect x={-far} y={-far} width={2 * far} height={2 * far} fill="#78716c" fillOpacity={0.14} mask="url(#dexter-reach-mask)" />}
         <line x1={-far} y1={0} x2={far} y2={0} stroke="#a8a29e" vectorEffect="non-scaling-stroke" />
         <line x1={0} y1={-far} x2={0} y2={far} stroke="#a8a29e" vectorEffect="non-scaling-stroke" />
-        <rect x={x1} y={y1} width={x2 - x1} height={y2 - y1} fill="#f97316" fillOpacity={0.18}
-          stroke="#f97316" strokeWidth={edit ? 2 : 1.5} vectorEffect="non-scaling-stroke" />
+        {shown.map(([x1, x2, y1, y2], k) => {
+          const on = edit && k === active
+          const clash = edit && clashes.has(k)
+          return (
+            <rect key={k} x={x1} y={y1} width={x2 - x1} height={y2 - y1} fill={AREA_COLORS[k]}
+              fillOpacity={!edit ? 0.2 : on ? 0.28 : 0.12}
+              stroke={clash ? '#e11d48' : AREA_COLORS[k]} strokeDasharray={clash ? '6 4' : undefined}
+              strokeWidth={!edit ? 1.5 : on ? 3 : 1.5} vectorEffect="non-scaling-stroke" />
+          )
+        })}
         <circle r={reach * (edit ? 0.02 : 0.04)} fill="#3f3f46" />
       </g>
+
+      {/* area names, at each area's top-left corner */}
+      {(shown.length > 1 || edit) &&
+        shown.map(([x1, , , y2], k) => (
+          <text key={k} x={x1 + font * 0.3} y={-y2 + font * (edit ? 1.15 : 2.2)} fontSize={font * (edit ? 1.1 : 2)}
+            fontWeight={700} fill={AREA_COLORS[k]} className="pointer-events-none">
+            {AREA_NAMES[k]}
+          </text>
+        ))}
 
       {/* axis labels (outside the flipped group so the text is not mirrored) */}
       {edit &&
@@ -116,6 +148,29 @@ export default function TaskAreaPicker({ rect, reach, step, units, mode, onRect 
           <text x={font * 0.6} y={-R * 0.92}>y</text>
         </g>
       )}
+
+      {/* tick just above the area being drawn: done with it, go on to the next area */}
+      {edit && onNext && !drag && active < rects.length && (() => {
+        const [, x2, , y2] = rects[active]
+        const h = font * 2.1
+        const w = font * 5.6
+        const above = -y2 - h - font * 0.4
+        const top = above < -R ? -y2 + font * 0.4 : above // no room above: just inside the top edge
+        const left = Math.max(-R, Math.min(R - w, x2 - w))
+        return (
+          <g
+            className="cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()} // a click here must not start a new drawing
+            onClick={onNext}
+          >
+            <title>Done with this area: draw the next one</title>
+            <rect x={left} y={top} width={w} height={h} rx={h / 2} fill="#1c1917" />
+            <text x={left + w / 2} y={top + h * 0.68} textAnchor="middle" fontSize={font * 1.15} fontWeight={700} fill="#fff">
+              ✓ Next
+            </text>
+          </g>
+        )
+      })()}
     </svg>
   )
 }

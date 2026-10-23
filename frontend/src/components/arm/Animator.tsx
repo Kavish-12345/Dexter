@@ -5,7 +5,7 @@ import { forwardKinematics, type Pose } from '../../lib/arm'
 import type { Units } from '../../lib/fields'
 import { cubic } from '../../lib/trajectory'
 import { fromRad } from '../../lib/units'
-import { ARC_POINTS, MOVE_TIME, S, TRAIL_MAX, type Motion, type TextKey } from './scene'
+import { ARC_POINTS, S, TRAIL_MAX, type Motion, type TextKey } from './scene'
 
 function angle(rad: number, units: Units): string {
   const v = fromRad(rad, units.angle)
@@ -39,14 +39,14 @@ export default function Animator(props: Props) {
     const m = props.motion.current
     if (m) {
       const t = (performance.now() - m.start) / 1000
-      const p = { t1: cubic(m.from.t1, m.to.t1, MOVE_TIME, t), t2: cubic(m.from.t2, m.to.t2, MOVE_TIME, t) }
+      const p = { t1: cubic(m.from.t1, m.to.t1, m.duration, t), t2: cubic(m.from.t2, m.to.t2, m.duration, t) }
       props.poseRef.current = p
 
       // trail: the path the tool tip traces on the table during this move
       const ts = trailState.current
       if (ts.start !== m.start) {
         ts.start = m.start
-        ts.count = 0
+        if (!m.keepTrail) ts.count = 0
       }
       if (ts.count < TRAIL_MAX) {
         const { hand } = forwardKinematics(p.t1, p.t2, props.l1, props.l2)
@@ -56,7 +56,7 @@ export default function Animator(props: Props) {
         pos.needsUpdate = true
         props.trail.geometry.setDrawRange(0, ts.count)
       }
-      if (t >= MOVE_TIME) props.motion.current = null
+      if (t >= m.duration) props.motion.current = null
     }
 
     const p = props.poseRef.current

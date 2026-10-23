@@ -4,7 +4,7 @@ from robot.optimizer import pareto_front
 from validate import baseline_length, brute_force
 
 # 3 x 3 task points, links 5..12 cm in 1 cm steps, total <= 20 cm
-TINY = dict(task_rect=(10, 14, 5, 9), spacing=2.0, link_min=5.0, link_max=12.0, max_total=20.0, step=1.0)
+TINY = dict(task_rects=[(10, 14, 5, 9)], spacing=2.0, link_min=5.0, link_max=12.0, max_total=20.0, step=1.0)
 
 
 def dominates(a, b):

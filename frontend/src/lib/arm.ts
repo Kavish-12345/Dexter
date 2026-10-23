@@ -60,6 +60,13 @@ export function pickSolution(
   return { best, other }
 }
 
+/** Time (s) for a cubic move: set by the joint that turns most, at about maxSpeed rad/s,
+ *  so a long swing takes longer than a small step (kept between minTime and maxTime). */
+export function moveDuration(from: Pose, to: Pose, maxSpeed: number, minTime: number, maxTime: number): number {
+  const turn = Math.max(Math.abs(to.t1 - from.t1), Math.abs(to.t2 - from.t2))
+  return Math.min(maxTime, Math.max(minTime, turn / maxSpeed))
+}
+
 /** Design shown first: the shortest with coverage >= 95%, else the first on the front. */
 export function defaultDesign(front: Design[]): number {
   let pick = -1

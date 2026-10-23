@@ -4,7 +4,7 @@ import { ApiError, evaluateDesign, formatApiErrors, getDefaults, type Config } f
 const CONFIG: Config = {
   link_min: 5, link_max: 30, max_total: 45, min_coverage: 0.5,
   theta1_limits: [-Math.PI, Math.PI], theta2_limits: [-2.618, 2.618],
-  task_rect: [10, 25, 5, 20], grid_spacing: 1,
+  task_rects: [[10, 25, 5, 20]], grid_spacing: 1,
 }
 
 function mockFetch(status: number, body: unknown) {

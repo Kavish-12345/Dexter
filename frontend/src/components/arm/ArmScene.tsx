@@ -1,14 +1,15 @@
-import { Line, OrbitControls } from '@react-three/drei'
+import { Html, Line, OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { ApiError, getWorkspace, solveIk, type Config, type Design, type WorkspaceResult } from '../../api/client'
-import { midPose, pickSolution, type Option, type Pose } from '../../lib/arm'
+import { midPose, moveDuration, pickSolution, type Option, type Pose } from '../../lib/arm'
 import { show, type Units } from '../../lib/fields'
+import { AREA_COLORS, AREA_NAMES, tourStops } from '../../lib/taskArea'
 import Animator from './Animator'
 import Robot from './Robot'
-import { ARC_POINTS, COLORS, lineObject, S, TRAIL_MAX, type Motion, type TextKey } from './scene'
+import { ARC_POINTS, COLORS, JOINT_SPEED, lineObject, MOVE_MAX, MOVE_MIN, S, TOUR_PAUSE, TRAIL_MAX, type Motion, type TextKey } from './scene'
 import Stage from './Stage'
 import TaskPoints from './TaskPoints'
 
@@ -58,6 +59,10 @@ export default function ArmScene({ config, design, units, panelOpen }: Props) {
   const [showFrames, setShowFrames] = useState(true)
   const [showGhost, setShowGhost] = useState(false) // the other IK solution, off by default
   const [message, setMessage] = useState('Click a point on the table to send the tool there.')
+  const [touring, setTouring] = useState(false)
+  const [order, setOrder] = useState(() => config.task_rects.map((_, a) => a)) // tour order of the areas
+  const [dragged, setDragged] = useState<number | null>(null) // position of the chip being dragged
+  const tourId = useRef(0) // bumped to stop a running tour
   const start = useMemo(() => midPose(config), [config])
   const poseRef = useRef<Pose>(start)
   const motion = useRef<Motion>(null)
@@ -79,23 +84,56 @@ export default function ArmScene({ config, design, units, panelOpen }: Props) {
 
   useEffect(() => () => {
     document.body.style.cursor = ''
+    tourId.current += 1 // leaving the scene stops a running tour
   }, [])
 
-  async function moveTo(x: number, y: number) {
+  /** Send the tool to (x, y) along a joint-space cubic whose time fits the largest joint turn.
+   *  Returns the move time in s, or null if the tool cannot go there. */
+  async function moveTo(x: number, y: number, opts: { keepTrail?: boolean; label?: string } = {}) {
     try {
       const { solutions } = await solveIk(config, l1, l2, x, y)
       const { best, other } = pickSolution(solutions, poseRef.current, config)
       setGhost(other)
       setTarget({ x, y, ok: best !== null })
       if (best) {
-        setMessage(`Target (${show(x, 'length', units)}, ${show(y, 'length', units)}) ${units.length}`)
-        motion.current = { from: poseRef.current, to: best.pose, start: performance.now() }
-      } else {
-        setMessage(other ? 'Reachable, but not within the joint limits.' : 'Out of reach.')
+        const from = poseRef.current
+        const duration = moveDuration(from, best.pose, JOINT_SPEED, MOVE_MIN, MOVE_MAX)
+        setMessage(`${opts.label ?? 'Target'} (${show(x, 'length', units)}, ${show(y, 'length', units)}) ${units.length}`)
+        motion.current = { from, to: best.pose, start: performance.now(), duration, keepTrail: opts.keepTrail }
+        return duration
       }
+      setMessage(other ? 'Reachable, but not within the joint limits.' : 'Out of reach.')
     } catch (e) {
       setMessage(errorText(e))
     }
+    return null
+  }
+
+  function stopTour() {
+    tourId.current += 1
+    setTouring(false)
+  }
+
+  // Tour: visit one point in every area this arm reaches, in the chosen order and back to the first,
+  // each move a joint-space cubic. The trail is kept for the whole tour so the path stays visible.
+  async function runTour() {
+    if (!task) return
+    const byArea = new Map(tourStops(task, config.task_rects).map((s) => [s.area, s]))
+    const stops = order.filter((a) => byArea.has(a)).map((a) => byArea.get(a)!)
+    if (stops.length < 2) {
+      setMessage('The tour needs at least two areas this arm can reach.')
+      return
+    }
+    const id = ++tourId.current
+    setTouring(true)
+    const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000))
+    for (const [i, stop] of [...stops, stops[0]].entries()) {
+      if (tourId.current !== id) return // stopped, or a new tour started
+      const time = await moveTo(stop.x, stop.y, { keepTrail: i > 0, label: `Tour: area ${AREA_NAMES[stop.area]}` })
+      if (time === null) break
+      await wait(time + TOUR_PAUSE)
+    }
+    if (tourId.current === id) setTouring(false)
   }
 
   // Scene sizes, all proportional to the arm's reach.
@@ -103,11 +141,16 @@ export default function ArmScene({ config, design, units, panelOpen }: Props) {
   const k = R * S
   const height = 0.32 * k // links ride this high above the table
   const arcLift = 0.1 * k // frames and arcs just above the joint housings
-  const [xMin, xMax, yMin, yMax] = config.task_rect.map((v) => v * S)
-  const taskCenter = new THREE.Vector3((xMin + xMax) / 2, 0, -(yMin + yMax) / 2)
-  const look = taskCenter.clone().multiplyScalar(0.5) // halfway between the base and the task area
-  // D: size of what must be in view (the reach circle, or the task area if it is farther out).
-  const D = Math.max(k, ...[[xMin, yMin], [xMax, yMin], [xMin, yMax], [xMax, yMax]].map(([x, y]) => Math.hypot(x, y)))
+  const areas = config.task_rects.map((r) => r.map((v) => v * S)) // scene units
+  const n = areas.length
+  // look halfway between the base and the middle of the task areas
+  const look = new THREE.Vector3(
+    areas.reduce((a, [x1, x2]) => a + (x1 + x2) / 2, 0) / n,
+    0,
+    -areas.reduce((a, [, , y1, y2]) => a + (y1 + y2) / 2, 0) / n,
+  ).multiplyScalar(0.5)
+  // D: size of what must be in view (the reach circle, or a task area if it is farther out).
+  const D = Math.max(k, ...areas.flatMap(([x1, x2, y1, y2]) => [[x1, y1], [x2, y1], [x1, y2], [x2, y2]].map(([x, y]) => Math.hypot(x, y))))
   const tableSize = 2.3 * D
   const camera: [number, number, number] = [look.x + 0.15 * D, 1.15 * D, look.z + 1.45 * D]
   const reachCircle = useMemo(
@@ -127,18 +170,32 @@ export default function ArmScene({ config, design, units, panelOpen }: Props) {
       <Canvas dpr={[1, 1.5]} camera={{ position: camera, fov: 40, near: 0.01, far: 200 }}>
         <Stage k={k} height={height} tableSize={tableSize} view={D} />
 
-        {/* task area, reach circle and task points on the table top */}
-        <mesh position={[taskCenter.x, 0.002, taskCenter.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[xMax - xMin, yMax - yMin]} />
-          <meshBasicMaterial color={COLORS.accent} transparent opacity={0.06} />
-        </mesh>
-        <Line
-          points={[[xMin, 0.004, -yMin], [xMax, 0.004, -yMin], [xMax, 0.004, -yMax], [xMin, 0.004, -yMax], [xMin, 0.004, -yMin]]}
-          color={COLORS.accent}
-          lineWidth={1.5}
-        />
+        {/* task areas (one colour each), reach circle and task points on the table top */}
+        {areas.map(([xMin, xMax, yMin, yMax], a) => (
+          <group key={a}>
+            <mesh position={[(xMin + xMax) / 2, 0.002, -(yMin + yMax) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[xMax - xMin, yMax - yMin]} />
+              <meshBasicMaterial color={AREA_COLORS[a]} transparent opacity={0.06} />
+            </mesh>
+            <Line
+              points={[[xMin, 0.004, -yMin], [xMax, 0.004, -yMin], [xMax, 0.004, -yMax], [xMin, 0.004, -yMax], [xMin, 0.004, -yMin]]}
+              color={AREA_COLORS[a]}
+              lineWidth={1.5}
+            />
+            {n > 1 && (
+              <Html position={[xMin, 0.01, -yMax]} center zIndexRange={[10, 0]}>
+                <span className={`${chip} font-bold ring-white/15`} style={{ color: AREA_COLORS[a] }}>
+                  {AREA_NAMES[a]}
+                </span>
+              </Html>
+            )}
+          </group>
+        ))}
         <Line points={reachCircle} color={COLORS.reach} lineWidth={1} dashed dashSize={0.04 * k} gapSize={0.03 * k} />
-        {task && <TaskPoints task={task} r={Math.min(config.grid_spacing * S * 0.2, 0.012 * k)} onPick={(i) => moveTo(task.x[i], task.y[i])} />}
+        {task && <TaskPoints task={task} r={Math.min(config.grid_spacing * S * 0.2, 0.012 * k)} onPick={(i) => {
+          stopTour()
+          moveTo(task.x[i], task.y[i])
+        }} />}
 
         {/* where the tool is going, and the path it traced */}
         {target && (
@@ -196,7 +253,48 @@ export default function ArmScene({ config, design, units, panelOpen }: Props) {
           Reset view
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-4 left-4 space-y-1.5 text-xs">
+      {/* tour, bottom right (only with several task areas): drag the chips to change the order */}
+      {n > 1 && (
+        <div className={`absolute bottom-4 right-4 z-10 flex items-center gap-2 p-1.5 ${card}`}>
+          <div className="flex items-center gap-0.5 pl-1" title="Drag to change the tour order">
+            {order.map((a, i) => (
+              <span key={a} className="flex items-center gap-0.5">
+                {i > 0 && <span className="text-[11px] text-stone-600">›</span>}
+                <span
+                  draggable={!touring}
+                  onDragStart={() => setDragged(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragged === null || dragged === i) return
+                    const next = [...order]
+                    next.splice(i, 0, next.splice(dragged, 1)[0])
+                    setOrder(next)
+                  }}
+                  onDragEnd={() => setDragged(null)}
+                  className={`grid h-6 w-6 place-items-center rounded font-mono text-[11px] font-bold ring-1 ring-white/15 transition ${
+                    touring ? '' : 'cursor-grab hover:ring-white/40 active:cursor-grabbing'
+                  } ${dragged === i ? 'opacity-40' : ''}`}
+                  style={{ color: AREA_COLORS[a] }}
+                >
+                  {AREA_NAMES[a]}
+                </span>
+              </span>
+            ))}
+          </div>
+          <button
+            onClick={touring ? stopTour : runTour}
+            disabled={!task}
+            title={`Move the tool through the areas in this order and back to ${AREA_NAMES[order[0]]}`}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-40 ${
+              touring ? 'bg-stone-700 hover:bg-stone-600' : 'bg-orange-500 hover:bg-orange-600'
+            }`}
+          >
+            {touring ? '■ Stop' : '▶ Tour'}
+          </button>
+        </div>
+      )}
+
+      <div className={`pointer-events-none absolute bottom-4 left-4 space-y-1.5 text-xs ${n > 1 ? 'right-72' : ''}`}>
         {message && <p className={`inline-block px-2.5 py-1 text-stone-100 ${card}`}>{message}</p>}
         <p className="text-[11px] text-stone-400">
           <span className="text-emerald-400">●</span> covered <span className="ml-2 text-rose-400">●</span> not covered

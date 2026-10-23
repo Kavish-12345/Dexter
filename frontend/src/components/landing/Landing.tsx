@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import DemoArm from './DemoArm'
 
-// Numbers from the brute-force validation (backend/validate.py, default task, seeds 1-10 and 42).
+// Numbers from the brute-force validation (backend/validate.py: the default task and a two-area task,
+// seeds 1-10 and 42; every design on the 0.1 cm grid is 51,676 arms per task).
 const STATS = [
-  { value: '51,676', label: 'designs brute-forced to check the results' },
+  { value: '51,676', label: 'designs brute-forced per task, one and two areas' },
   { value: '3', label: 'goals traded off: coverage, dexterity, size' },
   { value: '~2 s', label: 'per optimization run' },
 ]

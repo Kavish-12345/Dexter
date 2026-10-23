@@ -1,22 +1,35 @@
-import type { Data, Layout, Shape } from 'plotly.js'
+import type { Annotations, Data, Layout, Shape } from 'plotly.js'
 import { useMemo } from 'react'
 import type { Config, Design } from '../../api/client'
 import { toGrid } from '../../lib/charts'
 import { show, type Units } from '../../lib/fields'
+import { AREA_COLORS, AREA_NAMES } from '../../lib/taskArea'
 import { fromCm } from '../../lib/units'
 import ChartCard, { Loading } from './ChartCard'
 import Plot from './Plot'
 import { useWorkspace } from './useWorkspace'
 
-/** Task rectangle and reach circle as Plotly shapes, in display units. */
+/** Task areas (one colour each) and the reach circle as Plotly shapes, in display units. */
 export function overlayShapes(config: Config, reach: number, units: Units): Partial<Shape>[] {
   const L = (v: number) => fromCm(v, units.length)
-  const [x1, x2, y1, y2] = config.task_rect.map(L)
   const R = L(reach)
   return [
-    { type: 'rect', x0: x1, x1: x2, y0: y1, y1: y2, line: { color: '#f97316', width: 2 } },
+    ...config.task_rects.map((r, k): Partial<Shape> => {
+      const [x1, x2, y1, y2] = r.map(L)
+      return { type: 'rect', x0: x1, x1: x2, y0: y1, y1: y2, line: { color: AREA_COLORS[k], width: 2 } }
+    }),
     { type: 'circle', x0: -R, x1: R, y0: -R, y1: R, line: { color: '#a8a29e', width: 1, dash: 'dash' } },
   ]
+}
+
+/** Area names (A, B, ...) at each area's top-left corner, when there is more than one area. */
+export function areaLabels(config: Config, units: Units): Partial<Annotations>[] {
+  if (config.task_rects.length < 2) return []
+  const L = (v: number) => fromCm(v, units.length)
+  return config.task_rects.map(([x1, , , y2], k) => ({
+    x: L(x1), y: L(y2), text: `<b>${AREA_NAMES[k]}</b>`, showarrow: false, xanchor: 'left', yanchor: 'bottom',
+    font: { color: AREA_COLORS[k], size: 13 },
+  }))
 }
 
 // Reachable workspace of the selected design: green where the tool can get to within the joint limits,
@@ -46,6 +59,7 @@ export default function WorkspaceTab({ config, design, units }: { config: Config
       xaxis: { title: { text: `x (${u})` }, constrain: 'domain' },
       yaxis: { title: { text: `y (${u})` }, scaleanchor: 'x', constrain: 'domain' },
       shapes: overlayShapes(config, design.l1 + design.l2, units),
+      annotations: areaLabels(config, units),
     }
     return { traces, layout }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,8 +74,13 @@ export default function WorkspaceTab({ config, design, units }: { config: Config
       note={
         data ? (
           <>
-            Green: where the tool can reach within the joint limits. {covered} of {total} task points covered (
-            {((100 * covered) / Math.max(total, 1)).toFixed(1)}%). Dashed circle: reach l1 + l2 = {show(design.l1 + design.l2, 'length', units)} {u}.
+            Green: where the tool can reach within the joint limits.{' '}
+            {data.task.area_coverage.length > 1
+              ? `Coverage ${(100 * design.coverage).toFixed(1)}%, the mean of the areas: ` +
+                data.task.area_coverage.map((c, k) => `${AREA_NAMES[k]} ${(100 * c).toFixed(1)}%`).join(', ') +
+                ` (${covered} of ${total} task points)`
+              : `${covered} of ${total} task points covered (${((100 * covered) / Math.max(total, 1)).toFixed(1)}%)`}
+            . Dashed circle: reach l1 + l2 = {show(design.l1 + design.l2, 'length', units)} {u}.
           </>
         ) : (
           'Loading the workspace of this design…'

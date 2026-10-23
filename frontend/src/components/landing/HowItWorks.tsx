@@ -87,7 +87,7 @@ interface Step {
 const STEPS: Step[] = [
   {
     title: 'Define the task',
-    text: 'Draw the area the tool must reach, and set the link lengths and joint limits allowed.',
+    text: 'Draw up to four areas the tool must reach, and set the link lengths and joint limits allowed.',
     under: 'Task grid · joint limits',
     art: <TaskArt />,
   },

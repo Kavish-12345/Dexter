@@ -287,11 +287,11 @@ const TOPICS: Topic[] = [
   {
     title: 'Objectives & constraints',
     eqs: [
-      <>max coverage = covered / total task points</>,
+      <>max coverage = mean over areas of (covered / points in the area)</>,
       <>max dexterity · min l{sub('1')} + l{sub('2')}</>,
       <>l{sub('min')} ≤ l{sub('1')}, l{sub('2')} ≤ l{sub('max')} · l{sub('1')} + l{sub('2')} ≤ L{sub('total')}</>,
     ],
-    note: 'Three goals that pull against each other: reach more of the task, stay away from singularities, and stay small. Plus a coverage floor and joint limits (an angle also counts if θ ± 360° fits).',
+    note: 'Three goals that pull against each other: reach more of the task, stay away from singularities, and stay small. Plus a coverage floor that every task area must meet, and joint limits (an angle also counts if θ ± 360° fits).',
     art: <ObjectivesArt />,
   },
   {

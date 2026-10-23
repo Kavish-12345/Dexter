@@ -16,10 +16,11 @@ export function toGrid<T>(x: number[], y: number[], values: T[]): { xs: number[]
 }
 
 /** Rule-of-thumb baseline (same as backend/validate.py): equal links whose total just reaches the
- *  farthest task corner, rounded up to the length step and kept within the link limits. */
+ *  farthest task corner (over all task areas), rounded up to the length step and kept within the link limits. */
 export function baselineLength(config: Config): number {
-  const [x1, x2, y1, y2] = config.task_rect
-  const far = Math.max(...[[x1, y1], [x2, y1], [x1, y2], [x2, y2]].map(([x, y]) => Math.hypot(x, y)))
+  const far = Math.max(
+    ...config.task_rects.flatMap(([x1, x2, y1, y2]) => [[x1, y1], [x2, y1], [x1, y2], [x2, y2]].map(([x, y]) => Math.hypot(x, y))),
+  )
   const k = Math.ceil((far / 2 - config.link_min) / LENGTH_STEP - 1e-9)
   const b = Math.min(Math.max(config.link_min + k * LENGTH_STEP, config.link_min), config.link_max)
   return Number(b.toFixed(9))

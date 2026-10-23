@@ -2,6 +2,7 @@
 // units.ts converts for display. In development, Vite forwards /api to FastAPI (vite.config.ts).
 
 export type Range = [number, number]
+export type Rect = [number, number, number, number] // x_min, x_max, y_min, y_max (cm)
 
 export interface Config {
   link_min: number
@@ -10,7 +11,7 @@ export interface Config {
   min_coverage: number // fraction 0..1
   theta1_limits: Range // rad
   theta2_limits: Range // rad
-  task_rect: [number, number, number, number] // x_min, x_max, y_min, y_max (cm)
+  task_rects: Rect[] // 1 to 4 task areas (A, B, C, D)
   grid_spacing: number
 }
 
@@ -19,7 +20,8 @@ export interface Scores {
   dexterity: number
   length: number
   feasible: boolean
-  shortfall: number
+  shortfall: number // worst area's miss of the coverage floor
+  area_coverage: number[] // coverage of each task area
 }
 
 export interface Design extends Scores {
@@ -53,7 +55,7 @@ export interface WorkspaceResult {
   y: number[]
   covered: boolean[]
   dexterity: (number | null)[] // null where not covered
-  task: { x: number[]; y: number[]; covered: boolean[] }
+  task: { x: number[]; y: number[]; covered: boolean[]; area: number[]; area_coverage: number[] }
 }
 
 // One entry of FastAPI's 422 "detail" list.

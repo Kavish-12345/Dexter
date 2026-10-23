@@ -7,13 +7,15 @@ import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, model_validator
 
-from robot.defaults import (GRID_SPACING, JOINT_LIMITS, LINK_MAX, LINK_MIN, MAX_TOTAL, MIN_COVERAGE,
-                            TASK_RECT, WORKSPACE_GRID)
+from robot.defaults import (GRID_SPACING, JOINT_LIMITS, LINK_MAX, LINK_MIN, MAX_AREAS, MAX_TOTAL,
+                            MIN_COVERAGE, TASK_RECTS, WORKSPACE_GRID)
 from robot.dexterity import dexterity
 from robot.fitness import evaluate
 from robot.kinematics import inverse_kinematics
 from robot.optimizer import optimize
-from robot.workspace import coverage, task_grid, within_limits
+from robot.workspace import area_coverage, coverage, task_grid, task_points, within_limits
+
+AREA_NAMES = "ABCD"
 
 app = FastAPI(title="Dexter API", description="Lengths in cm, angles in radians, min_coverage as a fraction 0..1.")
 
@@ -26,7 +28,8 @@ class Config(BaseModel):
     min_coverage: float = MIN_COVERAGE
     theta1_limits: tuple[float, float] = JOINT_LIMITS[0]
     theta2_limits: tuple[float, float] = JOINT_LIMITS[1]
-    task_rect: tuple[float, float, float, float] = TASK_RECT  # x_min, x_max, y_min, y_max
+    # one or more task areas, each (x_min, x_max, y_min, y_max)
+    task_rects: list[tuple[float, float, float, float]] = Field(default_factory=lambda: list(TASK_RECTS))
     grid_spacing: float = GRID_SPACING
 
     @model_validator(mode="after")
@@ -43,19 +46,29 @@ class Config(BaseModel):
         for name, (lo, hi) in (("theta1_limits", self.theta1_limits), ("theta2_limits", self.theta2_limits)):
             if lo > hi:
                 errors.append(f"{name}: lower limit must not exceed upper limit")
-        x_min, x_max, y_min, y_max = self.task_rect
-        rect_ok = True
-        if x_max < x_min:
-            errors.append("task_rect: x_max must be >= x_min")
-            rect_ok = False
-        if y_max < y_min:
-            errors.append("task_rect: y_max must be >= y_min")
-            rect_ok = False
+        rects_ok = True
+        if not 1 <= len(self.task_rects) <= MAX_AREAS:
+            errors.append(f"task_rects: give between 1 and {MAX_AREAS} task areas")
+            rects_ok = False
+        for name, (x_min, x_max, y_min, y_max) in zip(AREA_NAMES, self.task_rects):
+            if x_max < x_min:
+                errors.append(f"task area {name}: x_max must be >= x_min")
+                rects_ok = False
+            if y_max < y_min:
+                errors.append(f"task area {name}: y_max must be >= y_min")
+                rects_ok = False
+        # areas must not overlap or touch, so no task point is counted twice
+        for i, a in enumerate(self.task_rects[:MAX_AREAS]):
+            for j in range(i + 1, min(len(self.task_rects), MAX_AREAS)):
+                b = self.task_rects[j]
+                if a[0] <= b[1] and b[0] <= a[1] and a[2] <= b[3] and b[2] <= a[3]:
+                    errors.append(f"task areas {AREA_NAMES[i]} and {AREA_NAMES[j]} must not overlap or touch")
+                    rects_ok = False
         if self.grid_spacing <= 0:
             errors.append("grid_spacing must be greater than 0")
-        elif rect_ok:
+        elif rects_ok:
             try:
-                task_grid(*self.task_rect, self.grid_spacing)  # raises if over the 2,500-point cap
+                task_points(self.task_rects, self.grid_spacing)  # raises if over the 2,500-point cap
             except ValueError as e:
                 errors.append(str(e))
         if errors:
@@ -91,15 +104,15 @@ def get_defaults() -> Config:
 def post_evaluate(req: DesignRequest):
     """Score one design exactly as given (for example the baseline arm)."""
     cfg = req.config
-    x, y = task_grid(*cfg.task_rect, cfg.grid_spacing)
+    x, y, area = task_points(cfg.task_rects, cfg.grid_spacing)
     return evaluate(req.l1, req.l2, x, y, cfg.limits(), cfg.link_min, cfg.link_max,
-                    cfg.max_total, cfg.min_coverage)
+                    cfg.max_total, cfg.min_coverage, area)
 
 
 @app.post("/optimize")
 def post_optimize(cfg: Config):
     """Run NSGA-II with the fixed population, generations, seed and length step from defaults.py."""
-    return optimize(task_rect=cfg.task_rect, spacing=cfg.grid_spacing, limits=cfg.limits(),
+    return optimize(task_rects=cfg.task_rects, spacing=cfg.grid_spacing, limits=cfg.limits(),
                     link_min=cfg.link_min, link_max=cfg.link_max, max_total=cfg.max_total,
                     min_coverage=cfg.min_coverage)
 
@@ -131,12 +144,13 @@ def post_workspace(req: DesignRequest):
     x, y = task_grid(-reach, reach, -reach, reach, 2 * reach / (WORKSPACE_GRID - 1))
     _, covered = coverage(req.l1, req.l2, x, y, cfg.limits())
     _, scores = dexterity(req.l1, req.l2, x, y, covered)
-    tx, ty = task_grid(*cfg.task_rect, cfg.grid_spacing)
+    tx, ty, area = task_points(cfg.task_rects, cfg.grid_spacing)
     _, task_covered = coverage(req.l1, req.l2, tx, ty, cfg.limits())
     return {
         "x": x.tolist(),
         "y": y.tolist(),
         "covered": covered.tolist(),
         "dexterity": _nan_to_none(scores),
-        "task": {"x": tx.tolist(), "y": ty.tolist(), "covered": task_covered.tolist()},
+        "task": {"x": tx.tolist(), "y": ty.tolist(), "covered": task_covered.tolist(), "area": area.tolist(),
+                 "area_coverage": area_coverage(task_covered, area, len(cfg.task_rects))},
     }

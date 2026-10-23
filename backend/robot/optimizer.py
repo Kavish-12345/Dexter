@@ -15,9 +15,9 @@ from deap import base, creator, tools
 
 from robot.defaults import (CX_PROB, ETA, GENERATIONS, GRID_SPACING, JOINT_LIMITS, LENGTH_STEP,
                             LINK_MAX, LINK_MIN, MAX_TOTAL, MIN_COVERAGE, MUT_PROB, POP_SIZE,
-                            SEED, TASK_RECT)
+                            SEED, TASK_RECTS)
 from robot.fitness import evaluate, repair
-from robot.workspace import task_grid
+from robot.workspace import task_points
 
 # DEAP keeps these classes globally, so create them only once.
 if not hasattr(creator, "ArmFitness"):
@@ -25,7 +25,7 @@ if not hasattr(creator, "ArmFitness"):
     creator.create("Arm", list, fitness=creator.ArmFitness)
 
 
-def optimize(task_rect=TASK_RECT, spacing=GRID_SPACING, limits=JOINT_LIMITS,
+def optimize(task_rects=TASK_RECTS, spacing=GRID_SPACING, limits=JOINT_LIMITS,
              link_min=LINK_MIN, link_max=LINK_MAX, max_total=MAX_TOTAL, step=LENGTH_STEP,
              min_coverage=MIN_COVERAGE, pop_size=POP_SIZE, generations=GENERATIONS, seed=SEED):
     """Run NSGA-II. Returns the front, whether any design was feasible, a per-generation log
@@ -33,14 +33,14 @@ def optimize(task_rect=TASK_RECT, spacing=GRID_SPACING, limits=JOINT_LIMITS,
     if pop_size < 4 or pop_size % 4 != 0:
         raise ValueError("pop_size must be a positive multiple of 4 (needed by DEAP's NSGA-II selection)")
     random.seed(seed)
-    x, y = task_grid(*task_rect, spacing)
+    x, y, area = task_points(task_rects, spacing)
     log = []
     archive = {}  # (l1, l2) -> design with its scores, for every design ever evaluated
 
     def fix_and_score(arm):
         # repair in place, then score; keep the raw result on the design for the output
         arm[0], arm[1] = repair(arm[0], arm[1], link_min, link_max, max_total, step)
-        arm.result = evaluate(arm[0], arm[1], x, y, limits, link_min, link_max, max_total, min_coverage)
+        arm.result = evaluate(arm[0], arm[1], x, y, limits, link_min, link_max, max_total, min_coverage, area)
         r = arm.result
         archive[(arm[0], arm[1])] = {"l1": arm[0], "l2": arm[1], **r}
         if r["feasible"]:

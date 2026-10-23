@@ -2,7 +2,7 @@
 // Every read and write is wrapped in try/catch: storage can be full, blocked or
 // disabled (private windows), and the app must still work without it.
 
-const PREFIX = 'dexter:v1:' // bump the version if the saved shapes ever change
+const PREFIX = 'dexter:v2:' // bump the version if the saved shapes ever change
 
 export function load<T>(key: string, fallback: T): T {
   try {

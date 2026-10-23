@@ -5,11 +5,17 @@ import * as THREE from 'three'
 import type { Pose } from '../../lib/arm'
 
 export const S = 0.1 // scene units per cm (1 unit = 10 cm)
-export const MOVE_TIME = 1.0 // s for one cubic move
-export const TRAIL_MAX = 240 // points kept in the tool-path trail
+// Each cubic move lasts as long as its largest joint turn needs at JOINT_SPEED, within these bounds,
+// so a 180 deg swing is slower than a small step (like a real arm with a joint speed limit).
+export const JOINT_SPEED = (110 * Math.PI) / 180 // rad/s
+export const MOVE_MIN = 0.6 // s
+export const MOVE_MAX = 2.6 // s
+export const TRAIL_MAX = 1800 // points kept in the tool-path trail (enough for a 4-area tour)
 export const ARC_POINTS = 48 // points in each theta arc
+export const TOUR_PAUSE = 0.5 // s the tool rests at each area during a tour
 
-export type Motion = { from: Pose; to: Pose; start: number } | null
+// One cubic move of `duration` s. keepTrail: continue the previous move's trail (the moves of a tour).
+export type Motion = { from: Pose; to: Pose; start: number; duration: number; keepTrail?: boolean } | null
 export type TextKey = 'j1' | 'j2' | 'readout' | 'fps'
 
 // Dark studio viewport inside the light app: charcoal table, white robot shell, graphite joints,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { Config } from '../api/client'
+import type { Config, Rect } from '../api/client'
 import { parse, show, type Kind, type Units } from '../lib/fields'
+import { AREA_COLORS, AREA_NAMES } from '../lib/taskArea'
 import type { AngleUnit, LengthUnit } from '../lib/units'
 import Logo from './Logo'
 import TaskAreaModal from './TaskAreaModal'
@@ -16,7 +17,7 @@ interface Field {
   set: (c: Config, v: number) => Config
 }
 
-// Copy of a fixed-length array with one entry replaced (for theta limits and task_rect).
+// Copy of a fixed-length array with one entry replaced (for theta limits and task areas).
 function replace<T extends number[]>(arr: T, i: number, v: number): T {
   return arr.map((x, j) => (j === i ? v : x)) as T
 }
@@ -35,13 +36,24 @@ const JOINT_FIELDS: Field[] = [
   { label: 'θ2 max', kind: 'angle', get: (c) => c.theta2_limits[1], set: (c, v) => ({ ...c, theta2_limits: replace(c.theta2_limits, 1, v) }) },
 ]
 
-const TASK_FIELDS: Field[] = [
-  { label: 'x min', kind: 'length', get: (c) => c.task_rect[0], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 0, v) }) },
-  { label: 'x max', kind: 'length', get: (c) => c.task_rect[1], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 1, v) }) },
-  { label: 'y min', kind: 'length', get: (c) => c.task_rect[2], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 2, v) }) },
-  { label: 'y max', kind: 'length', get: (c) => c.task_rect[3], set: (c, v) => ({ ...c, task_rect: replace(c.task_rect, 3, v) }) },
-  { label: 'Grid step', kind: 'length', get: (c) => c.grid_spacing, set: (c, v) => ({ ...c, grid_spacing: v }) },
-]
+const CORNER_LABELS = ['x min', 'x max', 'y min', 'y max']
+
+/** x/y fields of task area k (the one selected in the panel), plus the grid step shared by all areas. */
+function taskFields(k: number): Field[] {
+  const corner = (label: string, i: number): Field => ({
+    label,
+    kind: 'length',
+    get: (c) => c.task_rects[k][i],
+    set: (c, v) => ({ ...c, task_rects: c.task_rects.map((r, j) => (j === k ? replace(r, i, v) : r)) as Rect[] }),
+  })
+  return [
+    corner('x min', 0),
+    corner('x max', 1),
+    corner('y min', 2),
+    corner('y max', 3),
+    { label: 'Grid step', kind: 'length', get: (c) => c.grid_spacing, set: (c, v) => ({ ...c, grid_spacing: v }) },
+  ]
+}
 
 function unitLabel(kind: Kind, units: Units): string {
   return kind === 'length' ? units.length : kind === 'angle' ? units.angle : '%'
@@ -120,6 +132,8 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   const [rectVersion, setRectVersion] = useState(0) // bumped when the drawing board changes the task area
   const [drawing, setDrawing] = useState(false) // task-area modal open
+  const [area, setArea] = useState(0) // task area whose x/y fields are shown
+  const k = Math.min(area, config.task_rects.length - 1)
 
   function edit(f: Field, text: string) {
     const v = parse(text, f.kind, units)
@@ -208,19 +222,40 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
         <div className="grid grid-cols-2 gap-1.5">{fields(JOINT_FIELDS)}</div>
       </Section>
 
-      <Section title="Task area">
+      <Section title={config.task_rects.length > 1 ? `Task areas (${config.task_rects.length})` : 'Task area'}>
         {/* small read-only preview; the button opens the drawing board */}
         <div className="relative h-28 overflow-hidden rounded-lg bg-stone-50 ring-1 ring-stone-200">
-          <TaskAreaPicker rect={config.task_rect} reach={config.max_total} step={config.grid_spacing} units={units} mode="preview" />
+          <TaskAreaPicker rects={config.task_rects} reach={config.max_total} step={config.grid_spacing} units={units} mode="preview" />
           <button
             onClick={() => setDrawing(true)}
             disabled={busy}
             className="absolute bottom-2 right-2 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-orange-600 shadow-sm ring-1 ring-stone-200 transition hover:ring-orange-300 disabled:opacity-40"
           >
-            Set task area
+            {config.task_rects.length > 1 ? 'Edit areas' : 'Set task area'}
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-1.5">{fields(TASK_FIELDS, String(rectVersion))}</div>
+        {/* with several areas: pick which one the x/y fields below edit */}
+        {config.task_rects.length > 1 && (
+          <div className="flex gap-1">
+            {config.task_rects.map((_, j) => (
+              <button
+                key={j}
+                onClick={() => {
+                  setArea(j)
+                  // the x/y fields are re-derived for the other area, so drop their red marks
+                  setInvalid((prev) => new Set([...prev].filter((l) => !CORNER_LABELS.includes(l))))
+                }}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-semibold ring-1 transition ${
+                  j === k ? 'bg-stone-900 text-white ring-stone-900' : 'bg-white text-stone-500 ring-stone-200 hover:text-stone-900'
+                }`}
+              >
+                <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: AREA_COLORS[j] }} />
+                {AREA_NAMES[j]}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-1.5">{fields(taskFields(k), `${rectVersion}-${k}`)}</div>
       </Section>
 
       <div className="mt-auto space-y-1.5">
@@ -246,13 +281,14 @@ export default function TaskSetup({ config, units, busy, open, onToggle, onHome,
 
       {drawing && (
         <TaskAreaModal
-          rect={config.task_rect}
+          rects={config.task_rects}
           reach={config.max_total}
           step={config.grid_spacing}
           units={units}
           onClose={() => setDrawing(false)}
           onApply={(r) => {
-            onConfig({ ...config, task_rect: r })
+            onConfig({ ...config, task_rects: r })
+            setArea(0)
             setRectVersion((v) => v + 1)
           }}
         />

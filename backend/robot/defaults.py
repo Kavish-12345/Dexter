@@ -15,10 +15,12 @@ JOINT_LIMITS = (
     (math.radians(-150), math.radians(150)),  # theta2
 )
 TASK_RECT = (10.0, 25.0, 5.0, 20.0)  # x_min, x_max, y_min, y_max (cm)
+TASK_RECTS = (TASK_RECT,)  # the task can have several areas (1 to MAX_AREAS); one by default
 GRID_SPACING = 1.0     # cm
 
-# Safety cap, not a design choice: keeps one evaluation fast. Not user-editable.
-MAX_POINTS = 2500
+# Safety caps, not design choices: keep one evaluation fast. Not user-editable.
+MAX_POINTS = 2500      # task points over all areas together
+MAX_AREAS = 4
 
 # NSGA-II run settings (fixed: not in the API or form; optimize() still takes them for tests and step 10)
 POP_SIZE = 60          # must be a multiple of 4

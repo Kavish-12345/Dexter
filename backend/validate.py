@@ -5,31 +5,39 @@ Prints tables only and saves nothing. Seeds are fixed, so a rerun prints identic
 
 repair() snaps lengths to the 0.1 cm step, so the design space is a finite grid.
 Evaluating every design on that grid gives the exact true Pareto front to compare against.
+Checked twice: on the default single task area (Tables 1 and 2), and on a task with two areas in
+opposite quadrants (Table 3), where coverage is the mean over the areas and every area must reach
+the coverage floor.
 """
 import math
 import time
 
 from robot.defaults import (GRID_SPACING, JOINT_LIMITS, LENGTH_STEP, LINK_MAX, LINK_MIN, MAX_TOTAL,
-                            MIN_COVERAGE, SEED, TASK_RECT)
+                            MIN_COVERAGE, SEED, TASK_RECT, TASK_RECTS)
 from robot.fitness import evaluate
 from robot.kinematics import TOL
 from robot.optimizer import optimize, pareto_front
-from robot.workspace import task_grid
+from robot.workspace import task_grid, task_points
 
 SEEDS = [*range(1, 11), SEED]  # seeds 1-10, plus the default seed the UI uses
+# The default area plus a second one close to the base in the opposite quadrant. They pull against each
+# other: A (up to 32 cm away) needs long links, B (6 to 17 cm away) needs links that fold in far enough,
+# which theta2 <= 150 deg limits. (A mirror of A would be no test: theta1 turns fully, so it always
+# has the same coverage as A.)
+TWO_AREAS = [TASK_RECT, (-12.0, -4.0, -12.0, -4.0)]
 
 
-def brute_force(task_rect=TASK_RECT, spacing=GRID_SPACING, limits=JOINT_LIMITS, link_min=LINK_MIN,
+def brute_force(task_rects=TASK_RECTS, spacing=GRID_SPACING, limits=JOINT_LIMITS, link_min=LINK_MIN,
                 link_max=LINK_MAX, max_total=MAX_TOTAL, step=LENGTH_STEP, min_coverage=MIN_COVERAGE):
     """Evaluate every design on the length-step grid with l1 + l2 <= max_total."""
-    x, y = task_grid(*task_rect, spacing)
+    x, y, area = task_points(task_rects, spacing)
     n = math.floor((link_max - link_min) / step + 1e-9) + 1
     lengths = [round(link_min + k * step, 9) for k in range(n)]  # the same grid repair() snaps to
     designs = []
     for l1 in lengths:
         for l2 in lengths:
             if l1 + l2 <= max_total + TOL:
-                r = evaluate(l1, l2, x, y, limits, link_min, link_max, max_total, min_coverage)
+                r = evaluate(l1, l2, x, y, limits, link_min, link_max, max_total, min_coverage, area)
                 designs.append({"l1": l1, "l2": l2, **r})
     return designs
 
@@ -53,24 +61,25 @@ def _row(name, d, on_front):
           f"{'yes' if (d['l1'], d['l2']) in on_front else 'no'}")
 
 
-def main():
+def compare(title, task_rects):
+    """Brute-force the true front for this task, then print how every seed's NSGA-II front compares.
+    Returns the designs, the true front and the set of (l1, l2) on it."""
     t = time.time()
-    designs = brute_force()
+    designs = brute_force(task_rects)
     front = pareto_front(designs)
     on_front = {(d["l1"], d["l2"]) for d in front}
     best_cov = max(d["coverage"] for d in front)
     best_dex = max(d["dexterity"] for d in front)
     shortest = min(d["length"] for d in front)
-    print(f"Brute force: {len(designs)} designs, {len(front)} on the true front ({time.time() - t:.0f} s)\n")
-
-    print(f"Table 1: NSGA-II front vs the true front (seeds 1-10, plus the default seed {SEED})")
+    print(f"{title}")
+    print(f"Brute force: {len(designs)} designs, {len(front)} on the true front ({time.time() - t:.0f} s)")
     print(f"{'seed':>4}{'front':>7}{'on true front':>16}{'share':>8}{'avg miss':>10}"
           f"{'best cov':>10}{'best dex':>10}{'shortest':>10}")
     matches = [0, 0, 0]
     all_hits = all_returned = 0
     all_misses = []
     for seed in SEEDS:
-        res = optimize(seed=seed)["front"]
+        res = optimize(task_rects=task_rects, seed=seed)["front"]
         hits = sum((d["l1"], d["l2"]) in on_front for d in res)
         misses = [miss_distance(d, front) for d in res if (d["l1"], d["l2"]) not in on_front]
         avg_miss = sum(misses) / len(misses) if misses else 0.0
@@ -92,6 +101,13 @@ def main():
     overall_miss = sum(all_misses) / len(all_misses) if all_misses else 0.0
     print(f"All runs: {all_hits}/{all_returned} returned designs on the true front "
           f"({100 * all_hits / all_returned:.1f}%); misses are {overall_miss:.2f} cm from it on average\n")
+    return designs, front, on_front
+
+
+def main():
+    designs, front, on_front = compare(
+        f"Table 1: one task area, NSGA-II front vs the true front (seeds 1-10, plus the default seed {SEED})",
+        TASK_RECTS)
 
     print(f"Table 2: designs compared (NSGA-II candidates from the default seed {SEED})")
     print(f"{'design':<34}{'l1':>6}{'l2':>6}{'coverage':>10}{'dexterity':>10}{'length':>8}   "
@@ -110,6 +126,11 @@ def main():
     _row("NSGA-II best coverage", max(app_front, key=lambda d: (d["coverage"], -d["length"])), on_front)
     _row("NSGA-II best dexterity", max(app_front, key=lambda d: (d["dexterity"], d["coverage"])), on_front)
     _row("NSGA-II shortest", min(app_front, key=lambda d: (d["length"], -d["coverage"])), on_front)
+    print()
+
+    compare("Table 3: two task areas, far and near, in opposite quadrants "
+            f"(A {TWO_AREAS[0]}, B {TWO_AREAS[1]} cm; coverage = mean of the areas, floor on each)",
+            TWO_AREAS)
 
 
 if __name__ == "__main__":

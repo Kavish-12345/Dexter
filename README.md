@@ -2,9 +2,9 @@
 
 **Smarter robotic design, optimized for your workspace.**
 
-Dexter finds the best link lengths (l1, l2) for a two-link planar robot arm. You draw the task area the tool must reach. NSGA-II then trades off three objectives, and the resulting designs are shown live in 3D:
+Dexter finds the best link lengths (l1, l2) for a two-link planar robot arm. You draw up to four task areas the tool must reach, in any quadrant. NSGA-II then trades off three objectives, and the resulting designs are shown live in 3D:
 
-- **Coverage** (maximise): the share of task points the arm can reach within its joint limits.
+- **Coverage** (maximise): the share of each area's task points the arm can reach within its joint limits, averaged over the areas. Every area must also reach the minimum coverage on its own.
 - **Dexterity** (maximise): how far the arm stays from a singularity, |det J| / (l1·l2) = |sin θ2|.
 - **Size** (minimise): the total link length l1 + l2.
 
@@ -12,11 +12,11 @@ Dexter finds the best link lengths (l1, l2) for a two-link planar robot arm. You
 
 ## Features
 
-- Task setup: link limits, joint limits and a drag-to-draw task area, in mm, cm, m or in and in deg or rad.
-- 3D arm view: coordinate frames, both elbow solutions, and click-to-move along joint-space cubic trajectories.
-- Chart tabs: Workspace, Dexterity, Pareto front, Convergence and Comparison.
+- Task setup: link limits, joint limits and up to four drag-to-draw task areas, in mm, cm, m or in and in deg or rad.
+- 3D arm view: coordinate frames, both elbow solutions, click-to-move along joint-space cubic trajectories, and a tour that moves the tool through every task area.
+- Chart tabs: Workspace, Dexterity, Pareto front and Comparison.
 - Explainer pages: How it works and The math.
-- Results checked against a brute-force search of all 51,676 designs.
+- Results checked against a brute-force search of all 51,676 designs, for one task area and for two areas (see Validation).
 
 ## Screenshots
 
@@ -74,6 +74,17 @@ cd backend && pytest              # backend unit tests
 cd backend && python validate.py  # NSGA-II vs brute-force true Pareto front
 cd frontend && npm test           # frontend unit tests
 ```
+
+## Validation
+
+Link lengths are snapped to a 0.1 cm step, so every possible design can be evaluated: 51,676 arms per task. `validate.py` builds the exact true Pareto front by brute force and compares the NSGA-II result for 11 seeds.
+
+| Task | True front | NSGA-II designs exactly on it | Average miss | Best coverage / shortest arm found |
+| --- | --- | --- | --- | --- |
+| One area (default) | 184 designs | 50.1% | 0.15 cm | 11 / 11 seeds |
+| Two areas, far and near | 266 designs | 65.1% | 0.12 cm | 11 / 11 seeds |
+
+The designs that miss the true front are about one length step away from it.
 
 ## Project structure
 

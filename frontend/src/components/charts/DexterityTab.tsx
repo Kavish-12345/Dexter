@@ -7,7 +7,7 @@ import { fromCm } from '../../lib/units'
 import ChartCard, { Loading } from './ChartCard'
 import Plot from './Plot'
 import { useWorkspace } from './useWorkspace'
-import { overlayShapes } from './WorkspaceTab'
+import { areaLabels, overlayShapes } from './WorkspaceTab'
 
 // Dexterity map of the selected design: |det J| / (l1 l2) = |s2| at every reachable point.
 // Dark orange: far from a singularity (theta2 near +-90 deg); pale: close to one (arm straight or folded).
@@ -36,6 +36,7 @@ export default function DexterityTab({ config, design, units }: { config: Config
       xaxis: { title: { text: `x (${u})` }, constrain: 'domain' },
       yaxis: { title: { text: `y (${u})` }, scaleanchor: 'x', constrain: 'domain' },
       shapes: overlayShapes(config, design.l1 + design.l2, units),
+      annotations: areaLabels(config, units),
     }
     return { traces, layout }
     // eslint-disable-next-line react-hooks/exhaustive-deps

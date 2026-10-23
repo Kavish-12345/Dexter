@@ -12,7 +12,7 @@ def test_defaults():
     d = client.get("/defaults").json()
     assert (d["link_min"], d["link_max"], d["max_total"]) == (5.0, 30.0, 45.0)
     assert d["min_coverage"] == 0.5
-    assert d["task_rect"] == [10.0, 25.0, 5.0, 20.0]
+    assert d["task_rects"] == [[10.0, 25.0, 5.0, 20.0]]
     assert d["theta2_limits"] == pytest.approx([math.radians(-150), math.radians(150)])
     assert "pop_size" not in d  # fixed, not exposed
     assert "length_step" not in d  # fixed at 0.1 cm, not exposed
@@ -85,7 +85,11 @@ def test_workspace_shape_and_nulls():
     ({"link_min": 0}, "link_min must be greater than 0"),
     ({"link_min": 30}, "link_min must be less than link_max"),
     ({"link_min": 25}, "2 x link_min must not exceed max_total"),
-    ({"task_rect": [25, 10, 5, 20]}, "x_max must be >= x_min"),
+    ({"task_rects": [[25, 10, 5, 20]]}, "task area A: x_max must be >= x_min"),
+    ({"task_rects": []}, "give between 1 and 4 task areas"),
+    ({"task_rects": [[0, 1, 0, 1]] * 5}, "give between 1 and 4 task areas"),
+    ({"task_rects": [[10, 25, 5, 20], [20, 30, 15, 25]]}, "task areas A and B must not overlap or touch"),
+    ({"task_rects": [[10, 25, 5, 20], [-25, -10, -20, -5]], "grid_spacing": 0.4}, "over all areas exceeds the cap"),
     ({"grid_spacing": 0.1}, "exceeds the cap"),
     ({"min_coverage": 1.5}, "min_coverage must be between 0 and 1"),
     ({"grid_spacing": 0}, "grid_spacing must be greater than 0"),
@@ -95,3 +99,33 @@ def test_invalid_config_rejected(change, message):
     r = client.post("/optimize", json=change)
     assert r.status_code == 422
     assert message in r.text
+
+
+# --- several task areas ---
+FAR_AND_NEAR = [[10, 25, 5, 20], [-3, -1, -3, -1]]  # B is 1.4 to 4.2 cm from the base
+
+
+def test_evaluate_floor_applies_to_every_area():
+    # l1 = l2 = 20 reaches all of A, but none of B: theta2 <= 150 deg keeps the tool >= 10.35 cm away.
+    # Coverage is the mean over the areas, (100% + 0%) / 2 = 50%: B counts as much as A although it has
+    # only 9 points (by points it would be 256 / 265). Still infeasible, because B is below the floor.
+    body = client.post("/evaluate", json={"l1": 20, "l2": 20, "config": {"task_rects": FAR_AND_NEAR}}).json()
+    assert body["area_coverage"] == pytest.approx([1.0, 0.0])
+    assert body["coverage"] == pytest.approx(0.5)
+    assert body["feasible"] is False
+    assert body["shortfall"] == pytest.approx(0.5)
+
+
+def test_optimize_two_areas_meets_floor_in_each():
+    rects = [[10, 25, 5, 20], [-25, -10, -20, -5]]  # opposite quadrants
+    body = client.post("/optimize", json={"task_rects": rects}).json()
+    assert body["feasible_found"] is True
+    for d in body["front"]:
+        assert len(d["area_coverage"]) == 2
+        assert min(d["area_coverage"]) >= 0.5
+
+
+def test_workspace_marks_task_areas():
+    w = client.post("/workspace", json={"l1": 20, "l2": 20, "config": {"task_rects": FAR_AND_NEAR}}).json()
+    assert w["task"]["area"] == [0] * 256 + [1] * 9
+    assert w["task"]["area_coverage"] == pytest.approx([1.0, 0.0])

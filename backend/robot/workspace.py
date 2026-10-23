@@ -18,6 +18,28 @@ def task_grid(x_min, x_max, y_min, y_max, spacing=GRID_SPACING):
     return gx.ravel(), gy.ravel()
 
 
+def task_points(rects, spacing=GRID_SPACING):
+    """Grid points of every task area joined together, plus the area index (0, 1, ...) of each point.
+
+    The 2,500-point cap applies to all areas together. Returns x, y, area as 1-D arrays.
+    """
+    xs, ys, areas = [], [], []
+    for k, rect in enumerate(rects):
+        x, y = task_grid(*rect, spacing)
+        xs.append(x)
+        ys.append(y)
+        areas.append(np.full(len(x), k))
+    x, y, area = np.concatenate(xs), np.concatenate(ys), np.concatenate(areas)
+    if len(x) > MAX_POINTS:
+        raise ValueError(f"{len(x)} task points over all areas exceeds the cap of {MAX_POINTS}; use a larger spacing")
+    return x, y, area
+
+
+def area_coverage(covered, area, n_areas):
+    """Coverage fraction of each task area separately."""
+    return [float(covered[area == k].mean()) for k in range(n_areas)]
+
+
 def within_limits(theta, lo, hi):
     """True where theta, theta + 360 deg or theta - 360 deg lies in [lo, hi]."""
     ok = np.zeros(np.shape(theta), dtype=bool)

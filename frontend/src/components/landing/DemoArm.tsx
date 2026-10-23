@@ -75,7 +75,7 @@ export default function DemoArm() {
         y.push(gy)
       }
     }
-    return { x, y, covered: x.map(() => true) }
+    return { x, y, covered: x.map(() => true), area: x.map(() => 0), area_coverage: [1] }
   }, [])
 
   return (
